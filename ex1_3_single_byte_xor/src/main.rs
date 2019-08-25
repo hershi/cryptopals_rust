@@ -75,11 +75,6 @@ fn main() {
     let input = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
     let input_bytes = hex_decode(&input);
 
-
-    let decoded = decode_with(&input_bytes, 0);
-    let score = english_score(&decoded);
-    println!("{}: {}", decoded, score);
-
     let result = (0..255)
         .map(|i: u8| {
             let decoded = decode_with(&input_bytes, i);
