@@ -17,7 +17,7 @@ fn decode_with(input: &Vec<u8>, key: u8) -> String {
     input
         .iter()
         .map(|b| b^key)
-        .filter(|b| b.is_ascii_alphanumeric())
+        .filter(|b| b.is_ascii())
         .map(|b| b as char)
         .collect::<String>()
 }
