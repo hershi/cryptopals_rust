@@ -94,15 +94,15 @@ fn english_score(input: &str) -> f32 {
 
 // Find the best key to decode the input, and return
 // the decoded string + its score
-fn get_best_decoding(input: &str, consider_partial: bool) -> (&str, String, u64) {
+fn get_best_decoding(input: &str, consider_partial: bool) -> (&str, String, u8, u64) {
     let input_bytes = hex_decode(&input);
     (0..255)
-        .map(|i: u8| xor_decode(&input_bytes, i))
-        .filter(|decoded| consider_partial || input_bytes.len() == decoded.len())
-        .map(|decoded| {
+        .map(|i: u8| (xor_decode(&input_bytes, i), i))
+        .filter(|(decoded, _)| consider_partial || input_bytes.len() == decoded.len())
+        .map(|(decoded, key)| {
             let score = english_score(&decoded);
-            (input, decoded, (score * 1000f32) as u64) })
-        .min_by_key(|(_, _, score)| score.clone())
+            (input, decoded, key, (score * 1000f32) as u64) })
+        .min_by_key(|(_, _, _, score)| score.clone())
         .unwrap()
 }
 
@@ -110,9 +110,9 @@ fn main() {
     let input_lines = read_input();
     let result = input_lines.iter()
         .map(|input| get_best_decoding(&input, true))
-        .min_by_key(|(_,_, score)| score.clone())
+        .min_by_key(|(_,_,_, score)| score.clone())
         .unwrap();
 
     println!(
-        "Input: {}, Message: {}, Score: {}", result.0, result.1, result.2);
+        "Input: {}, Message: {}, Key: {}, Score: {}", result.0, result.1, result.2, result.3);
 }
