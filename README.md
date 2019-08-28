@@ -1,2 +1,2 @@
 # cryptopals_rust
-Crypto Pals in Rust
+Rust solutions to Cryptopals (https://cryptopals.com/) challenges
