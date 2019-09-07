@@ -1,0 +1,9 @@
+[package]
+name = "ex_11_ecb_cbc_oracle"
+version = "0.1.0"
+authors = ["Guy Hershenbaum <hershi@fb.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
