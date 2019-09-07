@@ -17,3 +17,9 @@ pub fn hex_encode(input: &Vec<u8>) -> String {
         .collect::<Vec<String>>()
         .join("")
 }
+
+pub fn to_string(input: &[u8]) -> String {
+    input.iter()
+        .map(|c| *c as char)
+        .collect::<String>()
+}
