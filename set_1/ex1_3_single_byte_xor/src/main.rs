@@ -83,5 +83,5 @@ fn main() {
         .min_by_key(|(_, _, score)| (score * 1000f32) as u64)
         .unwrap();
 
-    println!("Key: {}, Message: {}", result.0, result.1);
+    println!("Key: {}, Message: {}, Score: {}", result.0, result.1, result.2);
 }
