@@ -27,11 +27,14 @@ fn cbc_encrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>) -> Vec<u8> {
         key,
         None).unwrap();
 
+    encrypter.pad(false);
+
     let mut ciphertext = vec![0; input.len() + cipher.block_size()];
     let mut pos = 0;
     for chunk in input.chunks(cipher.block_size()) {
         let chunk = xor(chunk, &iv);
         let count = encrypter.update(&chunk, &mut ciphertext[pos..]).unwrap();
+        println!("Encrypted chunk size {}, count {}", chunk.len(), count);
         iv = ciphertext[pos..pos+cipher.block_size()].to_vec();
         pos += count;
     }
@@ -56,21 +59,18 @@ fn cbc_decrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>) -> Vec<u8> {
         let mut decrypted_chunk = vec![0; cipher.block_size() * 2];
         let count = decrypter.update(&chunk, &mut decrypted_chunk).unwrap();
         decrypted_chunk.truncate(count);
-        let iv = if pos == 0 { &iv } else { &input[pos-cipher.block_size()..pos] };
         decrypted_chunk = xor(&decrypted_chunk, &iv);
+        iv = chunk.to_vec();
         plaintext[pos..pos + decrypted_chunk.len()].clone_from_slice(&decrypted_chunk);
         pos += count;
     }
 
+    // We don't use padding, so expecting finalize to always result in 0
     let mut decrypted_chunk = vec![0; cipher.block_size() * 2];
     let count = decrypter.finalize(&mut decrypted_chunk).unwrap();
-    decrypted_chunk.truncate(count);
-    let iv = if pos == 0 { &iv } else { &input[pos-cipher.block_size()..pos] };
-    decrypted_chunk = xor(&decrypted_chunk, &iv);
-    plaintext[pos..pos + decrypted_chunk.len()].clone_from_slice(&decrypted_chunk);
-    pos += count;
-    plaintext.truncate(pos);
+    assert_eq!(count, 0);
 
+    plaintext.truncate(pos);
     plaintext.to_vec()
 }
 
@@ -80,6 +80,7 @@ fn main() {
     let key = KEY.as_bytes();
 
     let mut encrypted = read_input();
+    //let mut encrypted = cbc_encrypt(&"0123456789ABCDEF".as_bytes(), &key, iv.clone());
     let decrypted = cbc_decrypt(&encrypted, &key, iv.clone());
     println!("{}", to_string(&decrypted));
 }
