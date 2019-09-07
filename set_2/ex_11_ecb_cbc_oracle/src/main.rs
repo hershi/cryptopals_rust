@@ -35,10 +35,16 @@ fn add_pre_post_fixes(input: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+fn is_cbc(encrypted_data: &[u8]) -> bool {
+    false
+}
+
 fn main() {
     let input = "HELLO WORLD!!!!!!!!!!!!".as_bytes();
     for i in 0..20 {
-        println!("{}: {:?}", i, encryption_oracle(&input));
+        let encrypted = encryption_oracle(&input);
+        println!("{}: {:?}", i, encrypted);
+        println!("{}: Oracle says - {}", i, if is_cbc(&encrypted) { "CBC" } else { "ECB" });
     }
 }
 
