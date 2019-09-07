@@ -2,7 +2,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
 use data_encoding::BASE64;
-use openssl::symm::{encrypt, decrypt, Cipher, Crypter, Mode};
+use openssl::symm::{Cipher, Crypter, Mode};
 use utils::*;
 use utils::encoding::*;
 
@@ -34,7 +34,6 @@ fn cbc_encrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>) -> Vec<u8> {
     for chunk in input.chunks(cipher.block_size()) {
         let chunk = xor(chunk, &iv);
         let count = encrypter.update(&chunk, &mut ciphertext[pos..]).unwrap();
-        println!("Encrypted chunk size {}, count {}", chunk.len(), count);
         iv = ciphertext[pos..pos+cipher.block_size()].to_vec();
         pos += count;
     }
@@ -44,7 +43,7 @@ fn cbc_encrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>) -> Vec<u8> {
     ciphertext.to_vec()
 }
 
-fn cbc_decrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>) -> Vec<u8> {
+fn cbc_decrypt(input: &[u8], key: &[u8], iv: &Vec<u8>) -> Vec<u8> {
     let cipher = Cipher::aes_128_ecb();
     let mut decrypter = Crypter::new(
         cipher,
@@ -53,25 +52,13 @@ fn cbc_decrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>) -> Vec<u8> {
         None).unwrap();
     decrypter.pad(false);
 
-    let mut plaintext = vec![0; input.len()];
-    let mut pos = 0;
-    for chunk in input.chunks(cipher.block_size()) {
-        let mut decrypted_chunk = vec![0; cipher.block_size() * 2];
-        let count = decrypter.update(&chunk, &mut decrypted_chunk).unwrap();
-        decrypted_chunk.truncate(count);
-        decrypted_chunk = xor(&decrypted_chunk, &iv);
-        iv = chunk.to_vec();
-        plaintext[pos..pos + decrypted_chunk.len()].clone_from_slice(&decrypted_chunk);
-        pos += count;
-    }
+    let mut raw_decrypted_bytes = vec![0; input.len() + cipher.block_size()];
+    let count = decrypter.update(input, &mut raw_decrypted_bytes).unwrap();
 
-    // We don't use padding, so expecting finalize to always result in 0
-    let mut decrypted_chunk = vec![0; cipher.block_size() * 2];
-    let count = decrypter.finalize(&mut decrypted_chunk).unwrap();
-    assert_eq!(count, 0);
-
-    plaintext.truncate(pos);
-    plaintext.to_vec()
+    raw_decrypted_bytes.iter().take(count)
+        .zip(iv.iter().chain(input.iter())) // iterator for IV bytes
+        .map(|(b,i)| b^i)
+        .collect::<Vec<u8>>()
 }
 
 fn main() {
@@ -79,9 +66,11 @@ fn main() {
     let iv = vec![0u8; block_size];
     let key = KEY.as_bytes();
 
-    let mut encrypted = read_input();
-    //let mut encrypted = cbc_encrypt(&"0123456789ABCDEF".as_bytes(), &key, iv.clone());
-    let decrypted = cbc_decrypt(&encrypted, &key, iv.clone());
+    let input = read_input();
+    let decrypted = cbc_decrypt(&input, &key, &iv);
     println!("{}", to_string(&decrypted));
+
+    let encrypted = cbc_encrypt(&decrypted, &key, iv.clone());
+    assert_eq!(encrypted, input);
 }
 
