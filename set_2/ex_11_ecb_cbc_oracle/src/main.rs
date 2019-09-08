@@ -1,7 +1,4 @@
 use std::collections::HashMap;
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::fs::File;
 use utils::*;
 use utils::encryption::*;
 use rand::prelude::*;
@@ -14,15 +11,6 @@ const IV_SIZE : usize = 16;
 enum EncryptionMode {
     CBC,
     ECB
-}
-
-fn read_input() -> String {
-    let input_file = File::open("src/input.txt").unwrap();
-    let reader = BufReader::new(input_file);
-    reader.lines()
-        .map(|x|x.unwrap())
-        .collect::<Vec<String>>()
-        .join("")
 }
 
 fn encryption_oracle(input: &[u8]) -> (Vec<u8>, EncryptionMode) {
@@ -67,7 +55,7 @@ fn predicted_mode(input: &[u8]) -> EncryptionMode {
 }
 
 fn main() {
-    let input = read_input();
+    let input = std::iter::repeat('A').take(1000).collect::<String>();
     let input_bytes = input.as_bytes();
     for i in 0..50 {
         let (encrypted, mode) = encryption_oracle(&input_bytes);
