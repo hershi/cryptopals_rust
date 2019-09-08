@@ -11,3 +11,4 @@ openssl = "*"
 utils = {path = "../utils" }
 data-encoding = "*"
 rand = "0.7"
+lazy_static = "*"
