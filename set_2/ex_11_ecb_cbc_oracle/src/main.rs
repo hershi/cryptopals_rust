@@ -55,6 +55,8 @@ fn predicted_mode(input: &[u8]) -> EncryptionMode {
 }
 
 fn main() {
+    // By using a known input that's repetitive, we can expect repeated blocks
+    // in ECB, allowing for easy detection.
     let input = std::iter::repeat('A').take(1000).collect::<String>();
     let input_bytes = input.as_bytes();
     for i in 0..50 {
