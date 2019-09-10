@@ -42,6 +42,15 @@ pub fn get_char_frequencies(input: &str) -> HashMap<char, f32> {
             |mut acc, c| { *acc.entry(c).or_insert(0f32) += 1f32; acc})
 }
 
+pub fn get_byte_frequencies(input: &[u8]) -> HashMap<u8, f32> {
+    input
+        .iter()
+        .fold(
+            HashMap::new(),
+            |mut acc, b| { *acc.entry(*b).or_insert(0f32) += 1f32; acc})
+}
+
+
 pub fn english_score(input: &str) -> f32 {
     let mut frequencies = get_char_frequencies(&input);
 
