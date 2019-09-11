@@ -19,7 +19,9 @@ fn to_key_value_string(kvs: &HashMap<String, String>) -> String {
 }
 
 fn sanitize(email: &str) -> String {
-    email.to_string()
+    email.chars()
+        .filter(|&c| c != '&' && c != '=')
+        .collect::<String>()
 }
 
 fn profile_for(email: &str) -> String {
