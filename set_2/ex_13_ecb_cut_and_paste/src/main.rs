@@ -1,4 +1,14 @@
+#[macro_use]
+extern crate lazy_static;
+
 use std::collections::HashMap;
+use utils::*;
+
+const KEY_SIZE : usize = 16;
+
+lazy_static! {
+    pub static ref KEY: Vec<u8> = random_buffer(KEY_SIZE);
+}
 
 fn parse_key_values(input: &str) -> HashMap<String, String> {
     let mut map = HashMap::new();
