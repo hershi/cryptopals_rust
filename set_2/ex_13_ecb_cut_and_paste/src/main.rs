@@ -11,7 +11,16 @@ fn parse_key_values(input: &str) -> HashMap<String, String> {
     map
 }
 
+fn to_key_value_string(kvs: &HashMap<String, String>) -> String {
+    kvs.iter()
+        .map(|(k,v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("&")
+}
 
 fn main() {
-    println!("Map: {:?}", parse_key_values(&"foo=bar&baz=qux&zap=zazzle"));
+    let input = "foo=bar&baz=qux&zap=zazzle";
+    let map = parse_key_values(&input);
+    println!("Map: {:?}", map);
+    println!("As string: {}", to_key_value_string(&map));
 }
