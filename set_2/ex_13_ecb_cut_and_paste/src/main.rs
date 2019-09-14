@@ -48,11 +48,7 @@ fn decrypt_profile(profile: &[u8]) -> String {
 }
 
 fn main() {
-    let mut email = b"admin".to_vec();
-    println!("profile_for({}): {}",
-        to_string(&email),
-        to_string(&profile_for(&email)));
-
+    let mut email = b"a@b.com".to_vec();
     let original_size = encryption_oracle(&email).len();
 
     let mut encrypted = encryption_oracle(&email);
@@ -61,36 +57,22 @@ fn main() {
         encrypted = encryption_oracle(&email);
     }
 
+    // 1. We're at the boundary where a new block was added. This allows us to
+    // infer the block size.
     let block_size = encrypted.len() - original_size;
-
-    // We're at the boundary where a new block was added. Given how
-    // PKCS#7 padding works, this means that the new block is all
-    // padding.
-    //
-    // 1. Store the (encrypted) padding block - we'll need it later when we
-    // truncate an encrypted output at the block boundary and need to add
-    // a padding block (otherwise decryption fails)
-    let padding_block = encrypted
-        .as_slice()
-        .chunks(block_size)
-        .last()
-        .map(|chunk| chunk.to_vec())
-        .unwrap();
 
     // 2. Insert 4 more characters at the beginning to push out the 'user'
     // portion of 'email=foo@bar.com&uid=10&role=user' to be in the last block.
     // This means that if we take the encrypted blocks without the last one,
-    // we get something like 'email=...&role='
+    // we get 'email=...&role='
     email = b"____".iter().chain(email.iter()).cloned().collect();
     encrypted = encryption_oracle(&email);
 
-    // Take everything other than the last block, and we get
-    // 'email=...role=' without 'user'. Now we just need to get
-    // a block with 'admin<padding>' and concatenate the two
+    // Take everything other than the last block
     let without_last_block = encrypted.len() - block_size;
     let prefix = encrypted[0..without_last_block].to_vec();
 
-    // Now to create a block with 'admin<padding>':
+    // 3. Now to create a block with 'admin<padding>':
     // Create an input that's 'admin<padding>', then add a prefix
     // before 'admin' that will push it to be at the beginning of a
     // block.
@@ -113,6 +95,7 @@ fn main() {
         .unwrap()
         .to_vec();
 
+    // Concatenate the two pieces
     let mut crafted = prefix.clone();
     crafted.append(&mut prefix.clone());
     crafted.append(&mut padded_admin_block.clone());
