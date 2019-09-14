@@ -1,8 +1,17 @@
-use openssl::symm::{Cipher, Crypter, Mode, encrypt};
+use openssl::symm::{Cipher, Crypter, Mode, encrypt, decrypt};
 
 pub fn ecb_encrypt(input: &[u8], key: &[u8]) -> Vec<u8> {
     let cipher = Cipher::aes_128_ecb();
     encrypt(
+        cipher,
+        key,
+        None,
+        input).unwrap()
+}
+
+pub fn ecb_decrypt(input: &[u8], key: &[u8]) -> Vec<u8> {
+    let cipher = Cipher::aes_128_ecb();
+    decrypt(
         cipher,
         key,
         None,
