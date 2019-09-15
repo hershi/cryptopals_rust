@@ -97,7 +97,6 @@ fn main() {
 
     // Concatenate the two pieces
     let mut crafted = prefix.clone();
-    crafted.append(&mut prefix.clone());
     crafted.append(&mut padded_admin_block.clone());
 
     let decrypted_crafted = decrypt_profile(&crafted);
