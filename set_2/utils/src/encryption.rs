@@ -51,7 +51,7 @@ pub fn cbc_decrypt(input: &[u8], key: &[u8], iv: &Vec<u8>) -> Vec<u8> {
     // ATTENTION: We are decrypting without padding! If the input is padded
     // then this will fail or give odd results because padding bytes would not
     // be stripped.
-    decrypter.pad(false);
+    //decrypter.pad(false);
 
     let mut raw_decrypted_bytes = vec![0; input.len() + cipher.block_size()];
     let count = decrypter.update(input, &mut raw_decrypted_bytes).unwrap();
