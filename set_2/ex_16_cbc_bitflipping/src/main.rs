@@ -58,9 +58,28 @@ fn validator(encrypted: &[u8]) -> bool {
 }
 
 fn main() {
-    println!("{}", to_string(&generate_input(b";admin=true;")));
+    // Flip the first bit of each of the "problematic" chars, so that they are
+    // no longer escaped. If we can cause those bits to flip back during
+    // decryption by changing the cyphertext, then we're good
+    let mut byte_positions = vec![];
+    let mut input = Vec::new();
+    byte_positions.push(PREFIX.len() + input.len());
+    input.push(b';' ^ 1);
+    input.extend_from_slice(b"admin");
+    byte_positions.push(PREFIX.len() + input.len());
+    input.push(b'=' ^ 1);
+    input.extend_from_slice(b"true");
+    byte_positions.push(PREFIX.len() + input.len());
+    input.push(b';' ^ 1);
 
-    let encrypted = oracle(b";admin=true;");
+    println!("Input: {:?}", to_string(&input));
+    println!("Byte positions: {:?}", byte_positions);
+
+    let mut encrypted = oracle(&input);
+    for pos in byte_positions {
+        let prev_block_pos = pos - BLOCK_SIZE;
+        encrypted[prev_block_pos] ^= 1;
+    }
 
     println!("Result: {}", validator(&encrypted));
 }
