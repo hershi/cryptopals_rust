@@ -33,11 +33,13 @@ fn sanitize(user_data: &[u8]) -> Vec<u8> {
 
 fn generate_input(user_data: &[u8]) -> Vec<u8> {
     let user_data = sanitize(user_data);
-    PREFIX.iter()
+    let input = PREFIX.iter()
         .chain(&user_data)
         .chain(SUFFIX.iter())
         .cloned()
-        .collect()
+        .collect();
+
+    pad_block(input, BLOCK_SIZE as u8)
 }
 
 fn main() {
