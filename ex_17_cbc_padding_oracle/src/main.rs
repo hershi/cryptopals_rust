@@ -41,16 +41,18 @@ struct EncryptionOutput {
 fn encryption_oracle() -> EncryptionOutput {
     let input = choose_random_input();
     let input = pad_block(input.as_bytes().to_vec(), BLOCK_SIZE as u8);
+    println!("Encryption input: {:?}", input);
     let iv = random_buffer(IV_SIZE);
 
     EncryptionOutput {
-        encrypted_data: cbc_encrypt(&input, &KEY, iv.clone()),
+        encrypted_data: cbc_encrypt(&input, &KEY, iv.clone(), false),
         iv
     }
 }
 
 fn decrypt_and_validate_padding(input: &EncryptionOutput) -> bool {
     let decrypted = cbc_decrypt(&input.encrypted_data, &KEY, &input.iv, false);
+    println!("Decryption result: {:?}", decrypted);
     validate_padding(&decrypted, BLOCK_SIZE).is_ok()
 }
 

@@ -18,13 +18,15 @@ pub fn ecb_decrypt(input: &[u8], key: &[u8]) -> Vec<u8> {
         input).unwrap()
 }
 
-pub fn cbc_encrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>) -> Vec<u8> {
+pub fn cbc_encrypt(input: &[u8], key: &[u8], mut iv: Vec<u8>, pad: bool) -> Vec<u8> {
     let cipher = Cipher::aes_128_ecb();
     let mut encrypter = Crypter::new(
         cipher,
         Mode::Encrypt,
         key,
         None).unwrap();
+
+    encrypter.pad(pad);
 
     let mut ciphertext = vec![0; input.len() + cipher.block_size()];
     let mut pos = 0;

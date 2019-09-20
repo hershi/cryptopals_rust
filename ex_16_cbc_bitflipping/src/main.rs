@@ -46,7 +46,7 @@ fn generate_input(user_data: &[u8]) -> Vec<u8> {
 
 fn oracle(user_data: &[u8]) -> Vec<u8> {
     let input = generate_input(user_data);
-    cbc_encrypt(&input, &KEY, IV.clone())
+    cbc_encrypt(&input, &KEY, IV.clone(), true)
 }
 
 fn validator(encrypted: &[u8]) -> bool {

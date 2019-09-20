@@ -20,7 +20,7 @@ fn encryption_oracle(input: &[u8]) -> (Vec<u8>, EncryptionMode) {
 
     let use_cbc = random();
     if use_cbc {
-        (cbc_encrypt(&input, &key, random_buffer(IV_SIZE)), EncryptionMode::CBC)
+        (cbc_encrypt(&input, &key, random_buffer(IV_SIZE), true), EncryptionMode::CBC)
     } else {
         (ecb_encrypt(&input, &key), EncryptionMode::ECB)
     }
