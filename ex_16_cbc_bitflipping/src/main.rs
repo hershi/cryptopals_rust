@@ -50,7 +50,7 @@ fn oracle(user_data: &[u8]) -> Vec<u8> {
 }
 
 fn validator(encrypted: &[u8]) -> bool {
-    let decrypted = cbc_decrypt(encrypted, &KEY, &IV);
+    let decrypted = cbc_decrypt(encrypted, &KEY, &IV, true);
     let decrypted_string = to_string(&decrypted);
     println!("Decrypted: {}", decrypted_string);
 
