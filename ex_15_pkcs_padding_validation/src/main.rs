@@ -10,7 +10,8 @@ fn validate_padding(input: &[u8], block_size: usize) -> Result<(), &str> {
 
     // Last byte is less than block size. Let's see if all the `last_byte` bytes
     // have that value
-    if input.iter()
+    let last_block = input.chunks(block_size).last().unwrap();
+    if last_block.iter()
             .skip(block_size - last_byte as usize)
             .any(|&b| b != last_byte) {
         return Err("bad padding - some bytes with wrong value");
