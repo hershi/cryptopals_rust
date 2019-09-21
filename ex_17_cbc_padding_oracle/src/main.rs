@@ -151,10 +151,8 @@ fn crack_cbc(encrypted_data: &[u8], iv: &[u8]) -> Vec<u8> {
 
 fn main() {
     let encrypted = encryption_oracle();
-    let block = crack_cbc_block(encrypted.encrypted_data.chunks(BLOCK_SIZE).nth(0).unwrap(), &encrypted.iv);
-    println!("{:?}", to_string(&block));
     let mut plaintext = crack_cbc(&encrypted.encrypted_data, &encrypted.iv);
     strip_padding(&mut plaintext, BLOCK_SIZE);
     println!("{:?}", to_string(&plaintext));
-    println!("{:?}", BASE64.decode(&plaintext).unwrap());
+    println!("{:?}", to_string(&BASE64.decode(&plaintext).unwrap()));
 }
