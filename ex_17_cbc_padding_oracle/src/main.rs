@@ -57,25 +57,42 @@ fn decrypt_and_validate_padding(encrypted_data: &[u8], iv: &[u8]) -> bool {
 }
 
 fn crack_cbc_byte(input_block: &[u8], iv: &[u8], byte_index: usize) -> u8 {
+    // For the padding to be valid, the byte index after decryption should be
+    // equal to the number of bytes between byte_index and the end of the block
+    // *inclusive*
+    let padding = (BLOCK_SIZE - byte_index) as u8;
     for b in 0..=255 {
         let mut iv = iv.to_vec();
         iv[byte_index] ^= b;
 
         if !decrypt_and_validate_padding(input_block, &iv) {
+            // Invalid padding - this is not the byte value we are looking for
             continue;
         }
 
-        if byte_index == 0 { return b; }
+        // It's a valid padding and we're not at the last byte of the block.
+        // This means `b` achieves the right padding value
+        if byte_index < BLOCK_SIZE - 1 { return b ^ padding; }
 
+        // If we're at the last byte of the block, we need to handle the
+        // following edge case:
+        // If the value of the (plaintext) byte before last is 0x02, then we
+        // can achieve valid padding if we flip the last byte of the block to
+        // either 2 or 1... How do we know which one we hit?
+        // If `b` yields the plaintext byte 0x01, then changing the previous
+        // byte won't mess up the padding, otherwise, it will.
+        //
+        // Note that the same edge case exists if the bytes preceding the last
+        // are 0x03 0x03, or 0x04 0x04 0x04, ...
         iv[byte_index - 1] ^= 1;
         if !decrypt_and_validate_padding(input_block, &iv) {
             continue;
         }
 
-        return b;
+        return b ^ padding;
     }
 
-    0
+    panic!("Failed to decrypt byte!");
 }
 
 // Create an IV that would cause the bytes starting at byte_index+1 to decrypt
@@ -118,8 +135,7 @@ fn crack_cbc_block(input_block: &[u8], iv: &[u8]) -> Vec<u8> {
         // current byte decrypt to the padding value
         let iv = prep_iv(iv, byte_index, &cracked_block, padding);
 
-        let byte_mask = crack_cbc_byte(input_block, &iv, byte_index);
-        cracked_block[byte_index] = byte_mask ^ padding;
+        cracked_block[byte_index] = crack_cbc_byte(input_block, &iv, byte_index);
     }
 
     cracked_block
