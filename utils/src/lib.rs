@@ -27,9 +27,13 @@ pub fn validate_padding(input: &[u8], block_size: usize) -> Result<(), &str> {
         return Err("bad padding - empty input");
     }
 
-    let last_byte = *input.last().unwrap();
-    if last_byte as usize > block_size {
+    let last_byte = *input.last().unwrap() as usize;
+    if last_byte > block_size {
         return Err("bad padding - last byte too big");
+    }
+
+    if last_byte <= 0 {
+        return Err("bad padding - last byte too small");
     }
 
     // Last byte is less than block size. Let's see if all the `last_byte` bytes
@@ -37,11 +41,17 @@ pub fn validate_padding(input: &[u8], block_size: usize) -> Result<(), &str> {
     let last_block = input.chunks(block_size).last().unwrap();
     if last_block.iter()
             .skip(block_size - last_byte as usize)
-            .any(|&b| b != last_byte) {
+            .any(|&b| b != last_byte as u8) {
         return Err("bad padding - some bytes with wrong value");
     }
 
     Ok(())
+}
+
+pub fn strip_padding(input: &mut Vec<u8>, block_size: usize) {
+    assert!(validate_padding(input, block_size).is_ok());
+    let last_byte = *input.last().unwrap() as usize;
+    input.truncate(input.len() - last_byte);
 }
 
 pub fn random_buffer(size: usize) -> Vec<u8> {
