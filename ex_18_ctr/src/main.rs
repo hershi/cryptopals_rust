@@ -18,10 +18,10 @@ lazy_static! {
 
 fn gen_counter_bytes(counter: &u128) -> Vec<u8> {
     counter.to_le_bytes()
-        .chunks(8)
+        .chunks(BLOCK_SIZE / 2)
         .rev()
         .fold(
-            Vec::with_capacity(16),
+            Vec::with_capacity(BLOCK_SIZE),
             |mut acc, bytes| { acc.extend_from_slice(bytes); acc })
 }
 
