@@ -1,4 +1,5 @@
 use openssl::symm::{Cipher, Crypter, Mode, encrypt, decrypt};
+use super::xor;
 
 pub fn ecb_encrypt(input: &[u8], key: &[u8]) -> Vec<u8> {
     let cipher = Cipher::aes_128_ecb();
@@ -63,3 +64,32 @@ pub fn cbc_decrypt(input: &[u8], key: &[u8], iv: &Vec<u8>, pad: bool) -> Vec<u8>
         .map(|(b,i)| b^i)
         .collect::<Vec<u8>>()
 }
+
+fn gen_ctr_counter_bytes(counter: &u128) -> Vec<u8> {
+    let block_size = 16;
+    counter.to_le_bytes()
+        .chunks(block_size / 2)
+        .rev()
+        .fold(
+            Vec::with_capacity(block_size),
+            |mut acc, bytes| { acc.extend_from_slice(bytes); acc })
+}
+
+pub fn ctr_encrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
+    let block_size = 16;
+    input.chunks(block_size)
+        .zip(0u128..)
+        .map(|(block, counter)| {
+            let counter_bytes = gen_ctr_counter_bytes(&counter);
+            println!("{:?}", counter_bytes);
+            let key_stream = cbc_encrypt(&counter_bytes, key, iv.to_vec(), false);
+            xor(block, &key_stream)})
+        .fold(
+            Vec::with_capacity(input.len()),
+            |mut acc, mut block| { acc.append(&mut block); acc})
+}
+
+pub fn ctr_decrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
+    ctr_encrypt(input, key, iv)
+}
+
