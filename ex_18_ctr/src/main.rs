@@ -16,7 +16,7 @@ lazy_static! {
     pub static ref KEY: &'static[u8] = "YELLOW SUBMARINE".as_bytes();
 }
 
-fn gen_counter_bytes(counter: &u128) -> Vec<u8> {
+fn gen_ctr_counter_bytes(counter: &u128) -> Vec<u8> {
     counter.to_le_bytes()
         .chunks(BLOCK_SIZE / 2)
         .rev()
@@ -29,7 +29,7 @@ fn ctr_encrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
     input.chunks(BLOCK_SIZE)
         .zip(0u128..)
         .map(|(block, counter)| {
-            let counter_bytes = gen_counter_bytes(&counter);
+            let counter_bytes = gen_ctr_counter_bytes(&counter);
             println!("{:?}", counter_bytes);
             let key_stream = cbc_encrypt(&counter_bytes, key, iv.to_vec(), false);
             xor(block, &key_stream)})
