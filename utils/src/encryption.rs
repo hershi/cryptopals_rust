@@ -65,31 +65,21 @@ pub fn cbc_decrypt(input: &[u8], key: &[u8], iv: &Vec<u8>, pad: bool) -> Vec<u8>
         .collect::<Vec<u8>>()
 }
 
-fn gen_ctr_counter_bytes(counter: &u128) -> Vec<u8> {
-    let block_size = 16;
-    counter.to_le_bytes()
-        .chunks(block_size / 2)
-        .rev()
-        .fold(
-            Vec::with_capacity(block_size),
-            |mut acc, bytes| { acc.extend_from_slice(bytes); acc })
-}
-
-pub fn ctr_encrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
-    let block_size = 16;
-    input.chunks(block_size)
-        .zip(0u128..)
+pub fn ctr_encrypt(input: &[u8], key: &[u8], nonce: u64) -> Vec<u8> {
+    input.chunks(16)
+        .zip(0u64..)
         .map(|(block, counter)| {
-            let counter_bytes = gen_ctr_counter_bytes(&counter);
-            println!("{:?}", counter_bytes);
-            let key_stream = cbc_encrypt(&counter_bytes, key, iv.to_vec(), false);
+            let mut bytes = nonce.to_le_bytes().to_vec();
+            bytes.extend_from_slice(&counter.to_le_bytes());
+            println!("{:?}", bytes);
+            let key_stream = cbc_encrypt(&bytes, key, vec![0;16], false);
             xor(block, &key_stream)})
         .fold(
             Vec::with_capacity(input.len()),
             |mut acc, mut block| { acc.append(&mut block); acc})
 }
 
-pub fn ctr_decrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
-    ctr_encrypt(input, key, iv)
+pub fn ctr_decrypt(input: &[u8], key: &[u8], nonce: u64) -> Vec<u8> {
+    ctr_encrypt(input, key, nonce)
 }
 
