@@ -4,20 +4,34 @@ extern crate lazy_static;
 use utils::*;
 use utils::encoding::*;
 use utils::encryption::*;
+use data_encoding::BASE64;
 
 const BLOCK_SIZE : usize = 16;
 const IV_SIZE : usize = 16;
 const IV : [u8; IV_SIZE] = [0; IV_SIZE];
 
+const INPUT: &str = "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==";
+
 lazy_static! {
     pub static ref KEY: &'static[u8] = "YELLOW SUBMARINE".as_bytes();
+}
+
+fn gen_counter_bytes(counter: &u128) -> Vec<u8> {
+    counter.to_le_bytes()
+        .chunks(8)
+        .rev()
+        .fold(
+            Vec::with_capacity(16),
+            |mut acc, bytes| { acc.extend_from_slice(bytes); acc })
 }
 
 fn ctr_encrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
     input.chunks(BLOCK_SIZE)
         .zip(0u128..)
         .map(|(block, counter)| {
-            let key_stream = cbc_encrypt(&counter.to_le_bytes(), key, iv.to_vec(), false);
+            let counter_bytes = gen_counter_bytes(&counter);
+            println!("{:?}", counter_bytes);
+            let key_stream = cbc_encrypt(&counter_bytes, key, iv.to_vec(), false);
             xor(block, &key_stream)})
         .fold(
             Vec::with_capacity(input.len()),
@@ -29,10 +43,8 @@ fn ctr_decrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
 }
 
 fn main() {
-    let encrypted = ctr_encrypt("Abcd".as_bytes(), &KEY, &IV);
-    println!("{:?}", encrypted);
-
-    let decrypted = ctr_decrypt(&encrypted, &KEY, &IV);
-    println!("{:?}", decrypted);
-    println!("{:?}", to_string(&decrypted));
+    let encrypted = BASE64.decode(INPUT.as_bytes()).unwrap();
+    let plaintext = ctr_decrypt(&encrypted, &KEY, &IV);
+    println!("{:?}", plaintext);
+    println!("{:?}", to_string(&plaintext));
 }
