@@ -45,6 +45,5 @@ fn ctr_decrypt(input: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
 fn main() {
     let encrypted = BASE64.decode(INPUT.as_bytes()).unwrap();
     let plaintext = ctr_decrypt(&encrypted, &KEY, &IV);
-    println!("{:?}", plaintext);
-    println!("{:?}", to_string(&plaintext));
+    println!("{}", to_string(&plaintext));
 }
