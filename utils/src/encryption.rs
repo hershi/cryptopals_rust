@@ -71,7 +71,6 @@ pub fn ctr_encrypt(input: &[u8], key: &[u8], nonce: u64) -> Vec<u8> {
         .map(|(block, counter)| {
             let mut bytes = nonce.to_le_bytes().to_vec();
             bytes.extend_from_slice(&counter.to_le_bytes());
-            println!("{:?}", bytes);
             let key_stream = cbc_encrypt(&bytes, key, vec![0;16], false);
             xor(block, &key_stream)})
         .fold(
