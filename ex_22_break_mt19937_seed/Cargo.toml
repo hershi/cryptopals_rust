@@ -1,5 +1,5 @@
 [package]
-name = "ex_23_break_mt19937_seed"
+name = "ex_22_break_mt19937_seed"
 version = "0.1.0"
 authors = ["Guy Hershenbaum <hershi@fb.com>"]
 edition = "2018"
