@@ -165,12 +165,12 @@ fn evaluate_keysize(size: usize, input: &[u8]) -> f32 {
 
     let mut count = 0f32;
     let mut score = 0f32;
-    for i in 0..4 {
-        if size * (i+3) > input.len() { continue; }
+    for i in 0.. {
+        if size * (i+2) > input.len() { break; }
         count += 1f32;
         score += normalized_hamming_distance(
             &input[i * size..(i+1)*size],
-            &input[(i+2) * size..(i+3)*size]);
+            &input[(i+1) * size..(i+2)*size]);
     }
 
     score / count
