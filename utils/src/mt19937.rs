@@ -1,4 +1,3 @@
-#![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
 const W: u32 = 32;
@@ -15,9 +14,9 @@ const C: u32 = 0xEFC60000;
 const L: u32 = 18;
 const F: u64 = 1812433253;
 
-const lowest_w_bitmask: u32 = ((1isize << W) - 1) as u32;
-const lower_mask: u32 = ((1isize << R) - 1) as u32; // That is, the binary number of r 1's
-const upper_mask: u32 = (!lower_mask as isize & ((1isize << W) - 1)) as u32;
+const LOWEST_W_BITMASK: u32 = ((1isize << W) - 1) as u32;
+const LOWER_MASK: u32 = ((1isize << R) - 1) as u32; // That is, the binary number of r 1's
+const UPPER_MASK: u32 = (!LOWER_MASK as isize & ((1isize << W) - 1)) as u32;
 
 pub struct MersenneTwister {
     state: [u32; N],
@@ -32,7 +31,7 @@ impl MersenneTwister {
         mt.state[0] = seed;
 
         for i in 1..N {
-            let tmp = lowest_w_bitmask as u64 &
+            let tmp = LOWEST_W_BITMASK as u64 &
                 ((F * (mt.state[i-1] ^ (mt.state[i-1] >> (W-2))) as u64)
                 + i as u64);
             mt.state[i] = tmp as u32;
@@ -63,8 +62,8 @@ impl MersenneTwister {
 
     fn twist(&mut self) {
         for i in 0..N {
-            let x = (self.state[i] & upper_mask)
-                + (self.state[(i+1) % N] & lower_mask);
+            let x = (self.state[i] & UPPER_MASK)
+                + (self.state[(i+1) % N] & LOWER_MASK);
             let xA = x >> 1;
 
             let xA = if x % 2 == 0 { xA } else { xA ^ A };
