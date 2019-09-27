@@ -5,6 +5,7 @@ pub mod english_scoring;
 pub mod encoding;
 pub mod encryption;
 pub mod repeating_xor_cracker;
+pub mod mt19937;
 
 pub fn xor(input: &[u8], key: &[u8]) -> Vec<u8> {
     input
