@@ -10,15 +10,6 @@ const T: u32 = 15;
 const C: u32 = 0xEFC60000;
 const L: u32 = 18;
 
-fn temper(y: u32) -> u32 {
-    let y = y ^ ((y >> U) & D);
-    let y = y ^ ((y << S) & B);
-    let y = y ^ ((y << T) & C);
-    let y = y ^ (y >> L);
-
-    y
-}
-
 fn untemper_right_shift(val: u32, shift: u32, mask: u32) -> u32 {
     let mut base_bitmask = 2u64.pow(shift)-1 << ((W / shift) * shift);
     let mut bits_handled = 0;
@@ -59,12 +50,6 @@ fn untemper(y: u32) -> u32 {
 }
 
 fn main() {
-    let y = 0xF28ACCCCu32;
-    let tempered_y = temper(y);
-    println!("temper({}) {}", y, tempered_y);
-    let untempered = untemper(tempered_y);
-    println!("untemper({}) {}", tempered_y, untempered);
-
     let mut mt = MersenneTwister::new(rand::random::<u32>());
 
     let mut state = Vec::with_capacity(N);
@@ -80,6 +65,10 @@ fn main() {
     }
 
     let mut mt = MersenneTwister{state: mt_state, index:624};
-    println!("next reconstruction: {}", mt.extract_number());
+    let reconstruction = mt.extract_number();
+    println!("next reconstruction: {} (original: {}); same? {}",
+        reconstruction,
+        next,
+        next == reconstruction);
 }
 
