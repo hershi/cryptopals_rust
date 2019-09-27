@@ -1,3 +1,6 @@
+use utils::mt19937::*;
+
+const N: usize = 624;
 const W: u32 = 32;
 const U: u32 = 11;
 const D: u32 = 0xFFFFFFFF;
@@ -47,14 +50,6 @@ fn untemper_left_shift(val: u32, shift: u32, mask: u32) -> u32 {
     acc
 }
 
-
-fn untemper_helper(val: u32, shift: u32) -> u32 {
-    let bitmask = (2u32.pow(W-shift)-1) << shift;
-    let yh = val & bitmask;
-    let yl = (val & !bitmask) ^ (yh >> shift);
-    yh | yl
-}
-
 fn untemper(y: u32) -> u32 {
     let y = untemper_right_shift(y, L, 0xFFFFFFFF);
     let y = untemper_left_shift(y, T, C);
@@ -64,11 +59,27 @@ fn untemper(y: u32) -> u32 {
 }
 
 fn main() {
-    let y = 12354321u32;
+    let y = 0xF28ACCCCu32;
     let tempered_y = temper(y);
     println!("temper({}) {}", y, tempered_y);
     let untempered = untemper(tempered_y);
-    println!("val {:032b}", y);
     println!("untemper({}) {}", tempered_y, untempered);
+
+    let mut mt = MersenneTwister::new(rand::random::<u32>());
+
+    let mut state = Vec::with_capacity(N);
+    for _ in 0..N {
+        state.push(untemper(mt.extract_number()));
+    }
+    let next = mt.extract_number();
+    println!("next: {:?}", next);
+
+    let mut mt_state = [0; N];
+    for i in 0..N {
+        mt_state[i] = state[i];
+    }
+
+    let mut mt = MersenneTwister{state: mt_state, index:624};
+    println!("next reconstruction: {}", mt.extract_number());
 }
 
