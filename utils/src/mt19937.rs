@@ -19,8 +19,8 @@ const LOWER_MASK: u32 = ((1isize << R) - 1) as u32; // That is, the binary numbe
 const UPPER_MASK: u32 = (!LOWER_MASK as isize & ((1isize << W) - 1)) as u32;
 
 pub struct MersenneTwister {
-    state: [u32; N],
-    index: usize,
+    pub state: [u32; N],
+    pub index: usize,
 
 }
 
@@ -80,5 +80,44 @@ impl MersenneTwister {
         }
         println!("]");
         println!("Index: {}", self.index);
+    }
+
+    pub fn untemper(y: u32) -> u32 {
+        let y = MersenneTwister::untemper_right_shift(y, L, 0xFFFFFFFF);
+        let y = MersenneTwister::untemper_left_shift(y, T, C);
+        let y = MersenneTwister::untemper_left_shift(y, S, B);
+        let y = MersenneTwister::untemper_right_shift(y, U, D);
+        y
+    }
+
+    fn untemper_right_shift(val: u32, shift: u32, mask: u32) -> u32 {
+        let mut base_bitmask = 2u64.pow(shift)-1 << ((W / shift) * shift);
+        let mut bits_handled = 0;
+
+        let mut acc = 0;
+        while bits_handled < W {
+            let bitmask = base_bitmask as u32;
+            let x = (val & bitmask) ^ (((acc >> shift) & mask) & bitmask);
+            acc ^= x;
+
+            bits_handled += shift;
+            base_bitmask = base_bitmask >> shift;
+        }
+        acc
+    }
+
+    fn untemper_left_shift(val: u32, shift: u32, mask: u32) -> u32 {
+        let mut bitmask = 2u32.pow(shift)-1;
+        let mut bits_handled = 0;
+
+        let mut acc = 0;
+        while bits_handled < W {
+            let x = (val & bitmask) ^(((acc << shift) & mask) & bitmask);
+            acc ^= x;
+
+            bits_handled += shift;
+            bitmask = bitmask << shift;
+        }
+        acc
     }
 }
