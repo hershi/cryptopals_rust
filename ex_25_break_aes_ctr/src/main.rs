@@ -56,4 +56,20 @@ fn main() {
         xor(&xor(&encrypted, &edited_ciphertext), &my_text);
 
     println!("{}", to_string(&recovered_plaintext));
+    println!("----------------------------\n{}", to_string(&recovered_plaintext));
+
+    // Since 'my_text' is all 0's, xoring with it is a no-op, so we can drop it
+    // in our case (but not if it had to be something other than 0's)
+    let recovered_plaintext =
+        xor(&encrypted, &edited_ciphertext);
+
+    println!("{}", to_string(&recovered_plaintext));
+    println!("----------------------------\n{}", to_string(&recovered_plaintext));
+
+    // Or we can just recover the key stream based on the knowledge that
+    // each `ciphertext_byte == (plaintext_byte ^ key_stream_byte)` and the fact
+    // that we know the two other
+    let key_stream = xor(&edited_ciphertext, &my_text);
+    let recovered_plaintext = xor(&key_stream, &encrypted);
+    println!("{}", to_string(&recovered_plaintext));
 }
