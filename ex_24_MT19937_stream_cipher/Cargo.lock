@@ -35,7 +35,7 @@ version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "ex_24_MT19937_stream_cipher"
+name = "ex_24_mt19937_stream_cipher"
 version = "0.1.0"
 dependencies = [
  "data-encoding 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

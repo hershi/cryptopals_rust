@@ -1,5 +1,5 @@
 [package]
-name = "ex_24_MT19937_stream_cipher"
+name = "ex_24_mt19937_stream_cipher"
 version = "0.1.0"
 authors = ["Guy Hershenbaum <hershi@fb.com>"]
 edition = "2018"
