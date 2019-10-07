@@ -83,7 +83,9 @@ pub fn sha1(message: &[u8]) -> Vec<u32> {
     vec![state.h0, state.h1, state.h2, state.h3, state.h4]
 }
 
+// See https://tools.ietf.org/html/rfc3174#section-6.1
 fn process_block(block: &[u8], state: &Sha1State) -> Sha1State{
+    // 6.1.a
     let mut w = block.chunks(4)
         .map(|chunk| {
             u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) })
@@ -92,16 +94,19 @@ fn process_block(block: &[u8], state: &Sha1State) -> Sha1State{
     assert!(w.len() == 16);
     w.reserve(64); // we're going to add 64 more elements
 
+    // 6.1.b
     for t in 16..=79 {
         w.push(circular_shift(w[t-3] ^ w[t-8] ^ w[t-14] ^ w[t-16], 1));
     }
 
+    // 6.1.c
     let mut a = state.h0;
     let mut b = state.h1;
     let mut c = state.h2;
     let mut d = state.h3;
     let mut e = state.h4;
 
+    // 6.1.d
     for t in 0..=79usize {
         let temp =
             Wrapping(circular_shift(a, 5)) +
@@ -116,6 +121,7 @@ fn process_block(block: &[u8], state: &Sha1State) -> Sha1State{
         a = temp.0;
     }
 
+    // 6.1.e
     Sha1State{
         h0: (Wrapping(state.h0) + Wrapping(a)).0,
         h1: (Wrapping(state.h1) + Wrapping(b)).0,
