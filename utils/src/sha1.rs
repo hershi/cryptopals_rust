@@ -32,6 +32,7 @@ fn pad(mut message: Vec<u8>) -> Vec<u8> {
     message
 }
 
+// See https://tools.ietf.org/html/rfc3174#section-5
 fn f(t: usize, b: u32, c: u32, d: u32) -> u32 {
     match t {
         0..=19 => (b & c) | ((!b) & d),
@@ -42,6 +43,7 @@ fn f(t: usize, b: u32, c: u32, d: u32) -> u32 {
     }
 }
 
+// See https://tools.ietf.org/html/rfc3174#section-5
 fn k(t: usize) -> u32 {
     match t {
         0..=19 => 0x5A827999,
@@ -61,6 +63,7 @@ struct Sha1State {
     h4: u32,
 }
 
+// See https://tools.ietf.org/html/rfc3174#section-6.1
 pub fn sha1(message: &[u8]) -> Vec<u32> {
     let message = pad(message.to_vec());
     let mut state = Sha1State{
