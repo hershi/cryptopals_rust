@@ -1,3 +1,5 @@
+use std::num::Wrapping;
+
 const BLOCK_SIZE_IN_BITS : u64 = 512;
 const MESSAGE_LEN_BITS: u64 = 64;
 
@@ -87,6 +89,9 @@ fn process_block(block: &[u8], state: &Sha1State) -> Sha1State{
             u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) })
         .collect::<Vec<u32>>();
 
+    assert!(w.len() == 16);
+    w.reserve(64); // we're going to add 64 more elements
+
     for t in 16..=79 {
         w.push(circular_shift(w[t-3] ^ w[t-8] ^ w[t-14] ^ w[t-16], 1));
     }
@@ -98,19 +103,24 @@ fn process_block(block: &[u8], state: &Sha1State) -> Sha1State{
     let mut e = state.h4;
 
     for t in 0..=79usize {
-        let temp = circular_shift(a, 5) + f(t,b,c,d) + e + w[t] + k(t);
+        let temp =
+            Wrapping(circular_shift(a, 5)) +
+            Wrapping(f(t,b,c,d)) +
+            Wrapping(e) +
+            Wrapping(w[t]) +
+            Wrapping(k(t));
         e = d;
         d = c;
         c = circular_shift(b, 30);
         b = a;
-        a = temp;
+        a = temp.0;
     }
 
     Sha1State{
-        h0: state.h0 + a,
-        h1: state.h1 + b,
-        h2: state.h2 + c,
-        h3: state.h3 + d,
-        h4: state.h4 + e,
+        h0: (Wrapping(state.h0) + Wrapping(a)).0,
+        h1: (Wrapping(state.h1) + Wrapping(b)).0,
+        h2: (Wrapping(state.h2) + Wrapping(c)).0,
+        h3: (Wrapping(state.h3) + Wrapping(d)).0,
+        h4: (Wrapping(state.h4) + Wrapping(e)).0,
     }
 }
