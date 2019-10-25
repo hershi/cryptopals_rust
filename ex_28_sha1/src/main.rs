@@ -11,14 +11,6 @@ lazy_static! {
     pub static ref KEY: Vec<u8> = random_buffer(KEY_SIZE);
 }
 
-fn print_hash(hash: &[u32]) {
-    print!("Hash : ");
-    for w in hash {
-        print!("{:08x}", w);
-    }
-    println!("");
-}
-
 fn secret_prefix_mac(key: &[u8], message: &[u8]) -> Vec<u32> {
     let prefixed_message =
         key.iter().chain(message.iter())

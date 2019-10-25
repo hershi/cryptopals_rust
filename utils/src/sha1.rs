@@ -7,7 +7,7 @@ fn circular_shift(word: u32, shift: u8) -> u32 {
     (word << shift) | (word >> (32 -shift))
 }
 
-fn pad(mut message: Vec<u8>) -> Vec<u8> {
+pub fn pad(mut message: Vec<u8>) -> Vec<u8> {
     // Message length in bits
     let message_len : u64 = message.len() as u64 * 8;
     let message_len_with_footer = message_len + MESSAGE_LEN_BITS;
@@ -57,7 +57,7 @@ fn k(t: usize) -> u32 {
 }
 
 #[derive(Clone)]
-struct Sha1State {
+pub struct Sha1State {
     h0: u32,
     h1: u32,
     h2: u32,
@@ -65,16 +65,29 @@ struct Sha1State {
     h4: u32,
 }
 
-// See https://tools.ietf.org/html/rfc3174#section-6.1
+pub fn print_hash(hash: &[u32]) {
+    print!("Hash : ");
+    for w in hash {
+        print!("{:08x}", w);
+    }
+    println!("");
+}
+
 pub fn sha1(message: &[u8]) -> Vec<u32> {
+    sha1_with_init_state(
+        message,
+        Sha1State{
+            h0: 0x67452301,
+            h1: 0xEFCDAB89,
+            h2: 0x98BADCFE,
+            h3: 0x10325476,
+            h4: 0xC3D2E1F0,
+    })
+}
+
+// See https://tools.ietf.org/html/rfc3174#section-6.1
+pub fn sha1_with_init_state(message: &[u8], mut state: Sha1State) -> Vec<u32> {
     let message = pad(message.to_vec());
-    let mut state = Sha1State{
-        h0: 0x67452301,
-        h1: 0xEFCDAB89,
-        h2: 0x98BADCFE,
-        h3: 0x10325476,
-        h4: 0xC3D2E1F0,
-    };
 
     let block_size_in_bytes = (BLOCK_SIZE_IN_BITS / 8) as usize;
     message.chunks(block_size_in_bytes)
