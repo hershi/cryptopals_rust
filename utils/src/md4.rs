@@ -137,3 +137,4 @@ fn process_block(block: &[u8], state: &Sha1State) -> Sha1State{
         h4: (Wrapping(state.h4) + Wrapping(e)).0,
     }
 }
+
