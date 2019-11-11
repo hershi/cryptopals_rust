@@ -1,4 +1,15 @@
+use utils::md4::*;
+
+pub fn print_hash(hash: &[u8]) {
+    print!("Hash : ");
+    for b in hash {
+        print!("{:02x}", b);
+    }
+    println!("");
+}
+
 fn main() {
-    let x = 10u64;
-    println!("{:?}", x.to_be_bytes());
+    print_hash(&md4(b""));
+    print_hash(&md4(b"a"));
+    //print_hash(&md4(b"abc"));
 }
