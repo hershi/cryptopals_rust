@@ -24,117 +24,145 @@ pub fn pad(mut message: Vec<u8>) -> Vec<u8> {
         message.resize(message.len() + num_zero_padding_bytes, 0);
     }
 
-    message.extend_from_slice(&message_len.to_be_bytes());
+    message.extend_from_slice(&message_len.to_le_bytes());
     message
 }
 
-// See https://tools.ietf.org/html/rfc3174#section-5
-fn f(t: usize, b: u32, c: u32, d: u32) -> u32 {
-    match t {
-        0..=19 => (b & c) | ((!b) & d),
-        20..=39 => b ^ c ^ d,
-        40..=59 => (b & c) | (b & d) | (c & d),
-        60..=79 => b ^ c ^ d,
-        _ => panic!("t out of range"),
-    }
-}
-
-// See https://tools.ietf.org/html/rfc3174#section-5
-fn k(t: usize) -> u32 {
-    match t {
-        0..=19 => 0x5A827999,
-        20..=39 => 0x6ED9EBA1,
-        40..=59 => 0x8F1BBCDC,
-        60..=79 => 0xCA62C1D6,
-        _ => panic!("t out of range"),
-    }
-}
-
-pub fn print_hash(hash: &[u32]) {
-    print!("Hash : ");
-    for w in hash {
-        print!("{:08x}", w);
-    }
-    println!("");
-}
-
-
 #[derive(Clone, Debug)]
-pub struct Sha1State {
-    pub h0: u32,
-    pub h1: u32,
-    pub h2: u32,
-    pub h3: u32,
-    pub h4: u32,
+pub struct Md4State {
+    pub a: u32,
+    pub b: u32,
+    pub c: u32,
+    pub d: u32,
 }
 
-pub fn sha1_continuation(message: Vec<u8>, mut state: Sha1State) -> Vec<u32> {
+pub fn md4_continuation(message: Vec<u8>, state: Md4State) -> Vec<u8> {
+    let mut s = state.clone();
     let block_size_in_bytes = (BLOCK_SIZE_IN_BITS / 8) as usize;
     message.chunks(block_size_in_bytes)
-        .for_each(|block| state = process_block(block, &state));
+        .for_each(|block| s = process_block(block, &s));
 
-    vec![state.h0, state.h1, state.h2, state.h3, state.h4]
+    s.a.to_le_bytes().iter()
+        .chain(s.b.to_le_bytes().iter())
+        .chain(s.c.to_le_bytes().iter())
+        .chain(s.d.to_le_bytes().iter())
+        .cloned()
+        .collect()
 }
 
-// See https://tools.ietf.org/html/rfc3174#section-6.1
-pub fn sha1(message: &[u8]) -> Vec<u32> {
+fn f(x: u32, y: u32, z: u32) -> u32 {
+    (x & y) | (!x & z)
+}
+
+fn g(x: u32, y: u32, z: u32) -> u32 {
+    (x & y) | (x & z) | (y & z)
+}
+
+fn h(x: u32, y: u32, z: u32) -> u32 {
+    x ^ y ^ z
+}
+
+// See https://tools.ietf.org/html/rfc1320#section-3.3
+pub fn md4(message: &[u8]) -> Vec<u8> {
     let message = pad(message.to_vec());
-    let state = Sha1State{
-        h0: 0x67452301,
-        h1: 0xEFCDAB89,
-        h2: 0x98BADCFE,
-        h3: 0x10325476,
-        h4: 0xC3D2E1F0,
+    let state = Md4State{
+        a: 0x67452301,
+        b: 0xEFCDAB89,
+        c: 0x98BADCFE,
+        d: 0x10325476,
     };
 
-    sha1_continuation(message, state)
+    md4_continuation(message, state)
 }
 
-// See https://tools.ietf.org/html/rfc3174#section-6.1
-fn process_block(block: &[u8], state: &Sha1State) -> Sha1State{
-    // 6.1.a
-    let mut w = block.chunks(4)
-        .map(|chunk| {
-            u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) })
+fn r1(a: &mut u32, b: u32, c:u32, d:u32, xk: u32, s: u8) {
+    *a = circular_shift(
+        (Wrapping(*a) +
+        Wrapping(f(b,c,d)) +
+        Wrapping(xk as u32)).0, s);
+}
+
+fn r2(a: &mut u32, b: u32, c:u32, d:u32, xk: u32, s: u8) {
+    *a = circular_shift(
+        (Wrapping(*a) +
+        Wrapping(g(b,c,d)) +
+        Wrapping(xk as u32) +
+        Wrapping(0x5A827999)).0, s);
+}
+
+fn r3(a: &mut u32, b: u32, c:u32, d:u32, xk: u32, s: u8) {
+    *a = circular_shift(
+        (Wrapping(*a) +
+        Wrapping(h(b,c,d)) +
+        Wrapping(xk as u32) +
+        Wrapping(0x6ED9EBA1)).0, s);
+}
+
+// https://tools.ietf.org/html/rfc1320#section-3.4
+fn process_block(block: &[u8], state: &Md4State) -> Md4State{
+    let words = block
+        .chunks(4)
+        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect::<Vec<u32>>();
 
-    assert!(w.len() == 16);
-    w.reserve(64); // we're going to add 64 more elements
+    let mut s = state.clone();
 
-    // 6.1.b
-    for t in 16..=79 {
-        w.push(circular_shift(w[t-3] ^ w[t-8] ^ w[t-14] ^ w[t-16], 1));
-    }
+    r1(&mut s.a, s.b, s.c, s.d, words[0], 3);
+    r1(&mut s.d, s.a, s.b, s.c, words[1], 7);
+    r1(&mut s.c, s.d, s.a, s.b, words[2], 11);
+    r1(&mut s.b, s.c, s.d, s.a, words[3], 19);
+    r1(&mut s.a, s.b, s.c, s.d, words[4], 3);
+    r1(&mut s.d, s.a, s.b, s.c, words[5], 7);
+    r1(&mut s.c, s.d, s.a, s.b, words[6], 11);
+    r1(&mut s.b, s.c, s.d, s.a, words[7], 19);
+    r1(&mut s.a, s.b, s.c, s.d, words[8], 3);
+    r1(&mut s.d, s.a, s.b, s.c, words[9], 7);
+    r1(&mut s.c, s.d, s.a, s.b, words[10], 11);
+    r1(&mut s.b, s.c, s.d, s.a, words[11], 19);
+    r1(&mut s.a, s.b, s.c, s.d, words[12], 3);
+    r1(&mut s.d, s.a, s.b, s.c, words[13], 7);
+    r1(&mut s.c, s.d, s.a, s.b, words[14], 11);
+    r1(&mut s.b, s.c, s.d, s.a, words[15], 19);
 
-    // 6.1.c
-    let mut a = state.h0;
-    let mut b = state.h1;
-    let mut c = state.h2;
-    let mut d = state.h3;
-    let mut e = state.h4;
+    r2(&mut s.a, s.b, s.c, s.d, words[0], 3);
+    r2(&mut s.d, s.a, s.b, s.c, words[4], 5);
+    r2(&mut s.c, s.d, s.a, s.b, words[8], 9);
+    r2(&mut s.b, s.c, s.d, s.a, words[12], 13);
+    r2(&mut s.a, s.b, s.c, s.d, words[1], 3);
+    r2(&mut s.d, s.a, s.b, s.c, words[5], 5);
+    r2(&mut s.c, s.d, s.a, s.b, words[9], 9);
+    r2(&mut s.b, s.c, s.d, s.a, words[13], 13);
+    r2(&mut s.a, s.b, s.c, s.d, words[2], 3);
+    r2(&mut s.d, s.a, s.b, s.c, words[6], 5);
+    r2(&mut s.c, s.d, s.a, s.b, words[10], 9);
+    r2(&mut s.b, s.c, s.d, s.a, words[14], 13);
+    r2(&mut s.a, s.b, s.c, s.d, words[3], 3);
+    r2(&mut s.d, s.a, s.b, s.c, words[7], 5);
+    r2(&mut s.c, s.d, s.a, s.b, words[11], 9);
+    r2(&mut s.b, s.c, s.d, s.a, words[15], 13);
 
-    // 6.1.d
-    for t in 0..=79usize {
-        let temp =
-            Wrapping(circular_shift(a, 5)) +
-            Wrapping(f(t,b,c,d)) +
-            Wrapping(e) +
-            Wrapping(w[t]) +
-            Wrapping(k(t));
-        e = d;
-        d = c;
-        c = circular_shift(b, 30);
-        b = a;
-        a = temp.0;
-    }
+    r3(&mut s.a, s.b, s.c, s.d, words[0], 3);
+    r3(&mut s.d, s.a, s.b, s.c, words[8], 9);
+    r3(&mut s.c, s.d, s.a, s.b, words[4], 11);
+    r3(&mut s.b, s.c, s.d, s.a, words[12], 15);
+    r3(&mut s.a, s.b, s.c, s.d, words[2], 3);
+    r3(&mut s.d, s.a, s.b, s.c, words[10], 9);
+    r3(&mut s.c, s.d, s.a, s.b, words[6], 11);
+    r3(&mut s.b, s.c, s.d, s.a, words[14], 15);
+    r3(&mut s.a, s.b, s.c, s.d, words[1], 3);
+    r3(&mut s.d, s.a, s.b, s.c, words[9], 9);
+    r3(&mut s.c, s.d, s.a, s.b, words[5], 11);
+    r3(&mut s.b, s.c, s.d, s.a, words[13], 15);
+    r3(&mut s.a, s.b, s.c, s.d, words[3], 3);
+    r3(&mut s.d, s.a, s.b, s.c, words[11], 9);
+    r3(&mut s.c, s.d, s.a, s.b, words[7], 11);
+    r3(&mut s.b, s.c, s.d, s.a, words[15], 15);
 
-    // 6.1.e
-    Sha1State{
-        h0: (Wrapping(state.h0) + Wrapping(a)).0,
-        h1: (Wrapping(state.h1) + Wrapping(b)).0,
-        h2: (Wrapping(state.h2) + Wrapping(c)).0,
-        h3: (Wrapping(state.h3) + Wrapping(d)).0,
-        h4: (Wrapping(state.h4) + Wrapping(e)).0,
+    Md4State{
+        a: (Wrapping(state.a) + Wrapping(s.a)).0,
+        b: (Wrapping(state.b) + Wrapping(s.b)).0,
+        c: (Wrapping(state.c) + Wrapping(s.c)).0,
+        d: (Wrapping(state.d) + Wrapping(s.d)).0,
     }
 }
 

@@ -5,3 +5,11 @@ pub fn circular_shift(word: u32, shift: u8) -> u32 {
     (word << shift) | (word >> (32 -shift))
 }
 
+pub fn print_hash(hash: &[u32]) {
+    print!("Hash : ");
+    for w in hash {
+        print!("{:08x}", w);
+    }
+    println!("");
+}
+
