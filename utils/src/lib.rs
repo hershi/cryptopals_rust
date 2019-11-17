@@ -8,6 +8,7 @@ pub mod repeating_xor_cracker;
 pub mod mt19937;
 pub mod sha1;
 pub mod md4;
+pub mod hmac;
 pub mod hash_utils;
 
 pub fn xor(input: &[u8], key: &[u8]) -> Vec<u8> {

@@ -50,15 +50,6 @@ fn k(t: usize) -> u32 {
     }
 }
 
-pub fn print_hash(hash: &[u32]) {
-    print!("Hash : ");
-    for w in hash {
-        print!("{:08x}", w);
-    }
-    println!("");
-}
-
-
 #[derive(Clone, Debug)]
 pub struct Sha1State {
     pub h0: u32,
@@ -68,16 +59,22 @@ pub struct Sha1State {
     pub h4: u32,
 }
 
-pub fn sha1_continuation(message: Vec<u8>, mut state: Sha1State) -> Vec<u32> {
+pub fn sha1_continuation(message: Vec<u8>, mut state: Sha1State) -> Vec<u8> {
     let block_size_in_bytes = (BLOCK_SIZE_IN_BITS / 8) as usize;
     message.chunks(block_size_in_bytes)
         .for_each(|block| state = process_block(block, &state));
 
-    vec![state.h0, state.h1, state.h2, state.h3, state.h4]
+    state.h0.to_be_bytes().iter()
+        .chain(state.h1.to_be_bytes().iter())
+        .chain(state.h2.to_be_bytes().iter())
+        .chain(state.h3.to_be_bytes().iter())
+        .chain(state.h4.to_be_bytes().iter())
+        .cloned()
+        .collect()
 }
 
 // See https://tools.ietf.org/html/rfc3174#section-6.1
-pub fn sha1(message: &[u8]) -> Vec<u32> {
+pub fn sha1(message: &[u8]) -> Vec<u8> {
     let message = pad(message.to_vec());
     let state = Sha1State{
         h0: 0x67452301,

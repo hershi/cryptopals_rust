@@ -19,7 +19,7 @@ lazy_static! {
     pub static ref KEY: Vec<u8> = random_buffer(*KEY_SIZE);
 }
 
-fn secret_prefix_mac(message: &[u8]) -> Vec<u32> {
+fn secret_prefix_mac(message: &[u8]) -> Vec<u8> {
     let prefixed_message =
         KEY.iter().chain(message.iter())
         .cloned()
@@ -28,17 +28,24 @@ fn secret_prefix_mac(message: &[u8]) -> Vec<u32> {
     sha1(&prefixed_message)
 }
 
-fn break_mac_to_state(mac: &Vec<u32>) -> Sha1State {
+fn break_mac_to_state(mac: &Vec<u8>) -> Sha1State {
+    let words = mac
+        .chunks(4)
+        .map(|c| u32::from_be_bytes([c[0], c[1], c[2], c[3]]))
+        .collect::<Vec<u32>>();
+
+    assert!(words.len() == 5);
+
     Sha1State{
-        h0: mac[0],
-        h1: mac[1],
-        h2: mac[2],
-        h3: mac[3],
-        h4: mac[4],
+        h0: words[0],
+        h1: words[1],
+        h2: words[2],
+        h3: words[3],
+        h4: words[4],
     }
 }
 
-fn verify(message: &[u8], mac: &Vec<u32>) -> bool {
+fn verify(message: &[u8], mac: &Vec<u8>) -> bool {
     secret_prefix_mac(message) == *mac
 }
 
@@ -52,7 +59,6 @@ fn pad_with_size(message: &[u8], key_size: usize) -> Vec<u8> {
 
 fn main() {
     println!("key size: {}", *KEY_SIZE);
-    //println!("key: {:?}", key);
     println!("Message: {:?}", to_string(MESSAGE));
     let mac = secret_prefix_mac(&MESSAGE);
     print_hash(&mac);
