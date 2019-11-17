@@ -3,6 +3,8 @@ extern crate lazy_static;
 
 use rand::prelude::*;
 use std::iter;
+use std::time::Duration;
+use std::thread;
 use utils::*;
 use utils::hash_utils::*;
 use utils::hmac::*;
@@ -17,9 +19,14 @@ lazy_static! {
 
 fn validate_mac(data: &[u8], hmac: &[u8]) -> bool {
     let expected = hmac_sha1(&KEY, data);
+
+    let delay = Duration::from_millis(50);
     hmac.iter()
         .zip(expected.iter())
-        .all(|(a,b)| a == b)
+        .all(|(a,b)| {
+            thread::sleep(delay);
+            a == b
+        })
 }
 
 fn main() {
