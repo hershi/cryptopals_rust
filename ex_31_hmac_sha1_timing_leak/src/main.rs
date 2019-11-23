@@ -47,32 +47,21 @@ fn find_hmac_length(data: &[u8]) -> usize {
 }
 
 fn crack_next_byte_concurrent(data: &[u8], prefix: &mut Vec<u8>, pos: usize) {
-    let num_threads = 255;
-    let job_size = std::u8::MAX / num_threads;
-
     let (tx, rx) = mpsc::channel();
-
-    let threads = (0..num_threads)
+    let threads = (0..std::u8::MAX)
         .map(|i| {
-            let start = i * job_size;
-            let is_last_job = i == num_threads-1;
-            let end = if is_last_job { std::u8::MAX } else { start + job_size - 1};
             let mut prefix = prefix.clone();
             let data = data.to_vec();
             let tx = mpsc::Sender::clone(&tx);
 
             thread::spawn(move || {
-                let cracked_byte = (start..=end)
-                    .map(|b| {
-                        prefix[pos] = b;
-                        let time = SystemTime::now();
-                        validate_mac(&data, &prefix);
-                        validate_mac(&data, &prefix);
-                        validate_mac(&data, &prefix);
-                        (b, time.elapsed().unwrap()) })
-                    .max_by_key(|&(_, dur)| dur)
-                    .unwrap();
-                tx.send(cracked_byte).unwrap(); }) })
+                prefix[pos] = i;
+                let time = SystemTime::now();
+                validate_mac(&data, &prefix);
+                validate_mac(&data, &prefix);
+                validate_mac(&data, &prefix);
+                let result = (i, time.elapsed().unwrap());
+                tx.send(result).unwrap(); }) })
         .collect::<Vec<_>>();
 
     for thread in threads {
@@ -87,27 +76,6 @@ fn crack_next_byte_concurrent(data: &[u8], prefix: &mut Vec<u8>, pos: usize) {
         .map(|&(b,_)| b)
         .unwrap();
 
-}
-
-fn crack_next_byte(data: &[u8], prefix: &mut Vec<u8>, pos: usize) {
-    prefix[pos] = 0;
-    let time = SystemTime::now();
-    validate_mac(data, prefix);
-    let init_duration = time.elapsed().unwrap().as_millis() as i32;
-
-    for b in 1..std::u8::MAX {
-        prefix[pos] = b;
-        let time = SystemTime::now();
-        validate_mac(data, prefix);
-        let duration = time.elapsed().unwrap().as_millis() as i32;
-
-        if (duration - init_duration).abs() > 20 {
-            if duration < init_duration {
-                prefix[pos] = 0;
-            }
-            return;
-        }
-    }
 }
 
 fn find_hmac(data: &[u8]) -> Vec<u8> {
