@@ -18,7 +18,7 @@ lazy_static! {
 fn validate_mac(data: &[u8], hmac: &[u8]) -> bool {
     let expected = hmac_sha1(&KEY, data);
 
-    let delay = Duration::from_millis(5);
+    let delay = Duration::from_millis(1);
     hmac.len() == expected.len() &&
         hmac.iter()
         .zip(expected.iter())
