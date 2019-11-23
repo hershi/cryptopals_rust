@@ -18,7 +18,7 @@ lazy_static! {
 fn validate_mac(data: &[u8], hmac: &[u8]) -> bool {
     let expected = hmac_sha1(&KEY, data);
 
-    let delay = Duration::from_millis(50);
+    let delay = Duration::from_millis(5);
     hmac.len() == expected.len() &&
         hmac.iter()
         .zip(expected.iter())
@@ -106,10 +106,8 @@ fn find_hmac(data: &[u8]) -> Vec<u8> {
 
     let mut hmac = vec![0; len];
     for i in 0..len {
-        let time = SystemTime::now();
         crack_next_byte_concurrent(data, &mut hmac, i);
-        //crack_next_byte(data, &mut hmac, i);
-        println!("{}, {:?}", hmac[i], time.elapsed());
+        println!("{:02X} ", hmac[i]);
     }
     println!("");
 

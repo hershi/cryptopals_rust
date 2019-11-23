@@ -1,6 +1,5 @@
 use super::sha1::*;
 use super::xor;
-use std::iter;
 
 const IPAD_BYTE: u8 = 0x36;
 const OPAD_BYTE: u8 = 0x5C;
