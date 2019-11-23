@@ -46,6 +46,14 @@ fn find_hmac_length(data: &[u8]) -> usize {
         .unwrap()
 }
 
+fn time_byte_validation(data: &[u8], prefix: &[u8]) -> std::time::Duration {
+    let time = SystemTime::now();
+    validate_mac(&data, &prefix);
+    validate_mac(&data, &prefix);
+    validate_mac(&data, &prefix);
+    time.elapsed().unwrap()
+}
+
 fn crack_next_byte_concurrent(data: &[u8], prefix: &mut Vec<u8>, pos: usize) {
     let (tx, rx) = mpsc::channel();
     let threads = (0..std::u8::MAX)
@@ -56,17 +64,16 @@ fn crack_next_byte_concurrent(data: &[u8], prefix: &mut Vec<u8>, pos: usize) {
 
             thread::spawn(move || {
                 prefix[pos] = i;
-                let time = SystemTime::now();
-                validate_mac(&data, &prefix);
-                validate_mac(&data, &prefix);
-                validate_mac(&data, &prefix);
-                let result = (i, time.elapsed().unwrap());
+                let result = (i, time_byte_validation(&data, &prefix));
                 tx.send(result).unwrap(); }) })
         .collect::<Vec<_>>();
 
     for thread in threads {
         thread.join().unwrap();
     }
+
+    // Drop our tx handle, since while it's open the iteration below will never
+    // finish.
     drop(tx);
 
     let results = rx.iter().collect::<Vec<_>>();
