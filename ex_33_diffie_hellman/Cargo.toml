@@ -1,0 +1,16 @@
+[package]
+name = "ex_33_diffie_hellman"
+version = "0.1.0"
+authors = ["Guy Hershenbaum <hershi@fb.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+utils = {path = "../utils" }
+#num-bigint = "*"
+rand = "0.5.4"
+
+[dependencies.num-bigint]
+version = "0.2"
+features = ["rand"]
