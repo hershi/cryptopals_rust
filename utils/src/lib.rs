@@ -10,6 +10,7 @@ pub mod sha1;
 pub mod md4;
 pub mod hmac;
 pub mod hash_utils;
+pub mod diffie_hellman;
 
 pub fn xor(input: &[u8], key: &[u8]) -> Vec<u8> {
     input

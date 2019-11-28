@@ -9,5 +9,9 @@ edition = "2018"
 [dependencies]
 data-encoding = "*"
 lazy_static = "*"
-rand = "0.7"
+rand = "0.5.4"
 openssl = "*"
+
+[dependencies.num-bigint]
+version = "0.2"
+features = ["rand"]
