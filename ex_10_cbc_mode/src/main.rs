@@ -53,7 +53,8 @@ fn cbc_decrypt(input: &[u8], key: &[u8], iv: &Vec<u8>) -> Vec<u8> {
     decrypter.pad(false);
 
     let mut raw_decrypted_bytes = vec![0; input.len() + cipher.block_size()];
-    let count = decrypter.update(input, &mut raw_decrypted_bytes).unwrap();
+    let mut count = decrypter.update(input, &mut raw_decrypted_bytes).unwrap();
+    count += decrypter.finalize(&mut raw_decrypted_bytes[count..]).unwrap();
 
     raw_decrypted_bytes.iter().take(count)
         .zip(iv.iter().chain(input.iter())) // iterator for IV bytes
