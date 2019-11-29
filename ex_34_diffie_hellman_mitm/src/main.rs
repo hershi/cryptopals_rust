@@ -111,9 +111,20 @@ fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
     println!("\t\tDecrypted message from Alice `{}`", to_string(&decrypted));
 }
 
+fn mitm(
+    send: Sender<Vec<u8>>,
+    recv: Receiver<Vec<u8>>) {
+
+    for message in recv {
+        send.send(message).unwrap();
+    }
+}
+
 fn main() {
-    let (alice_send, bob_recv) = channel();
-    let (bob_send, alice_recv) = channel();
+    let (alice_send, mitm_recv_alice) = channel();
+    let (bob_send, mitm_recv_bob) = channel();
+    let (mitm_send_alice, alice_recv) = channel();
+    let (mitm_send_bob, bob_recv) = channel();
 
     let thread_alice = thread::spawn(move || {
         alice(alice_send, alice_recv);
@@ -121,6 +132,18 @@ fn main() {
 
     let thread_bob = thread::spawn(move || {
         bob(bob_send, bob_recv);
+    });
+
+    let thread_mitm_atob = thread::spawn(move || {
+        mitm(
+            mitm_send_bob,
+            mitm_recv_alice);
+    });
+
+    let thread_mitm_btoa = thread::spawn(move || {
+        mitm(
+            mitm_send_alice,
+            mitm_recv_bob);
     });
 
     thread_alice.join().unwrap();
