@@ -7,7 +7,7 @@ use utils::encryption::*;
 use utils::sha1::*;
 use std::thread;
 use std::sync::mpsc::{Sender, Receiver, channel};
-use bigint::{BigInt, Sign};
+use bigint::{BigInt, Sign, ToBigInt};
 
 const MESSAGE_A : &[u8] = b"Message from A to B";
 const MESSAGE_B : &[u8] = b"Message from B to A";
@@ -74,7 +74,6 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
 }
 
 fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
-
     println!("\t\tWaiting for Alice...");
     let p = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
     println!("\t\tReceived `p` from Alice");
@@ -112,12 +111,45 @@ fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
 }
 
 fn mitm(
-    send: Sender<Vec<u8>>,
-    recv: Receiver<Vec<u8>>) {
+        to_alice: Sender<Vec<u8>>,
+        to_bob: Sender<Vec<u8>>,
+        from_alice: Receiver<Vec<u8>>,
+        from_bob: Receiver<Vec<u8>>) {
+    println!("\t\t\t\tWaiting to receive from Alice...");
+    let p = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    println!("\t\t\t\tReceived `p` from Alice");
+    let g = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    println!("\t\t\t\tReceived `g` from Alice");
+    let public_other = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    println!("\t\t\t\tReceived `A` from Alice");
 
-    for message in recv {
-        send.send(message).unwrap();
-    }
+    to_bob.send(p.to_bytes_le().1).unwrap();
+    println!("\t\t\t\tSent `p` to Bob");
+    to_bob.send(g.to_bytes_le().1).unwrap();
+    println!("\t\t\t\tSent `g` to Bob");
+    to_bob.send(p.to_bytes_le().1).unwrap();
+    println!("\t\t\t\tSent `p` to Bob");
+
+    let public_bob = BigInt::from_bytes_le(Sign::Plus, &from_bob.recv().unwrap());
+    println!("\t\t\t\tReceived `B` from Bob");
+    to_alice.send(p.to_bytes_le().1).unwrap();
+    println!("\t\t\t\tSent `p` to Alice");
+
+    let encryption_key = sha1(&0.to_bigint().unwrap().to_bytes_le().1)
+        .iter()
+        .take(KEY_SIZE)
+        .cloned()
+        .collect::<Vec<u8>>();
+
+    let message = from_alice.recv().unwrap();
+    let decrypted = decrypt_message(&encryption_key, &message);
+    println!("\t\t\t\tMITM broken message from Alice to Bob `{}`", to_string(&decrypted));
+    to_bob.send(message).unwrap();
+
+    let message = from_bob.recv().unwrap();
+    let decrypted = decrypt_message(&encryption_key, &message);
+    println!("\t\t\t\tMITM broken message from Bob to Alice `{}`", to_string(&decrypted));
+    to_alice.send(message).unwrap();
 }
 
 fn main() {
@@ -134,18 +166,15 @@ fn main() {
         bob(bob_send, bob_recv);
     });
 
-    let thread_mitm_atob = thread::spawn(move || {
-        mitm(
-            mitm_send_bob,
-            mitm_recv_alice);
-    });
-
-    let thread_mitm_btoa = thread::spawn(move || {
+    let thread_mitm = thread::spawn(move || {
         mitm(
             mitm_send_alice,
+            mitm_send_bob,
+            mitm_recv_alice,
             mitm_recv_bob);
     });
 
     thread_alice.join().unwrap();
     thread_bob.join().unwrap();
+    thread_mitm.join().unwrap();
 }
