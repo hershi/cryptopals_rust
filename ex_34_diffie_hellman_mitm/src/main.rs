@@ -112,16 +112,15 @@ fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
 }
 
 fn main() {
-    println!("Hello, world!");
+    let (alice_send, bob_recv) = channel();
+    let (bob_send, alice_recv) = channel();
 
-    let (to_bob, from_alice) = channel();
-    let (to_alice, from_bob) = channel();
     let thread_alice = thread::spawn(move || {
-        alice(to_bob, from_bob);
+        alice(alice_send, alice_recv);
     });
 
     let thread_bob = thread::spawn(move || {
-        bob(to_alice, from_alice);
+        bob(bob_send, bob_recv);
     });
 
     thread_alice.join().unwrap();
