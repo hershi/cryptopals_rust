@@ -116,20 +116,54 @@ fn mitm_g_1(
         to_bob: Sender<Vec<u8>>,
         from_alice: Receiver<Vec<u8>>,
         from_bob: Receiver<Vec<u8>>) {
+    generic_mitm(
+        to_alice,
+        to_bob,
+        from_alice,
+        from_bob,
+        |pga| (pga.0, 1.to_bigint().unwrap(), 1.to_bigint().unwrap()),
+        |_: BigInt|  1.to_bigint().unwrap(),
+        1.to_bigint().unwrap());
+}
+
+fn mitm_g_p(
+        to_alice: Sender<Vec<u8>>,
+        to_bob: Sender<Vec<u8>>,
+        from_alice: Receiver<Vec<u8>>,
+        from_bob: Receiver<Vec<u8>>) {
+    generic_mitm(
+        to_alice,
+        to_bob,
+        from_alice,
+        from_bob,
+        |pga| (pga.0.clone(), pga.0, 0.to_bigint().unwrap()),
+        |_: BigInt|  0.to_bigint().unwrap(),
+        0.to_bigint().unwrap());
+}
+
+fn generic_mitm(
+        to_alice: Sender<Vec<u8>>,
+        to_bob: Sender<Vec<u8>>,
+        from_alice: Receiver<Vec<u8>>,
+        from_bob: Receiver<Vec<u8>>,
+        alice_mutator: fn((BigInt, BigInt, BigInt))->(BigInt, BigInt, BigInt),
+        bob_mutator: fn(BigInt)->BigInt,
+        session_key: BigInt)
+{
     println!("\t\t\t\tWaiting to receive from Alice...");
-    let (p, _, _) = recv_p_g_a(&from_alice);
+    let (p, g, a) = recv_p_g_a(&from_alice);
     println!("\t\t\t\tReceived `p, g, A` from Alice");
 
-    send_p_g_a(&to_bob, &p, &1.to_bigint().unwrap(), &1.to_bigint().unwrap());
-    println!("\t\t\t\tSent `(p, g=1, A=1)` to Bob");
+    let (p, g, a) = alice_mutator((p, g, a));
+    send_p_g_a(&to_bob, &p, &g, &a);
+    println!("\t\t\t\tSent `(p, g, A)` to Bob");
 
     let public_bob = recv_bigint(&from_bob);
     println!("\t\t\t\tReceived `B` from Bob");
-    assert!(public_bob == 1.to_bigint().unwrap());
+    let public_bob = bob_mutator(public_bob);
     to_alice.send(public_bob.to_bytes_le().1).unwrap();
     println!("\t\t\t\tSent `B` to Alice");
 
-    let session_key = 1.to_bigint().unwrap();
     let encryption_key = derive_encryption_key(&session_key);
 
     let message = from_alice.recv().unwrap();
@@ -143,7 +177,13 @@ fn mitm_g_1(
     to_alice.send(message).unwrap();
 }
 
-fn main() {
+
+fn run_mitm(mitm: fn(
+        Sender<Vec<u8>>,
+        Sender<Vec<u8>>,
+        Receiver<Vec<u8>>,
+        Receiver<Vec<u8>>)->())
+{
     let (alice_send, mitm_recv_alice) = channel();
     let (bob_send, mitm_recv_bob) = channel();
     let (mitm_send_alice, alice_recv) = channel();
@@ -158,7 +198,7 @@ fn main() {
     });
 
     let thread_mitm = thread::spawn(move || {
-        mitm_g_1(
+        mitm(
             mitm_send_alice,
             mitm_send_bob,
             mitm_recv_alice,
@@ -168,4 +208,13 @@ fn main() {
     thread_alice.join().unwrap();
     thread_bob.join().unwrap();
     thread_mitm.join().unwrap();
+}
+
+fn main() {
+    println!("Part 1");
+    run_mitm(mitm_g_1);
+    println!("-------------------------------------\n\n");
+    println!("Part 2");
+    run_mitm(mitm_g_p);
+    println!("-------------------------------------\n\n");
 }
