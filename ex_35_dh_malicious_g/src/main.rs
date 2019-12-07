@@ -65,7 +65,7 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
     println!("Sent to Bob");
 
     let public_other = BigInt::from_bytes_le(Sign::Plus, &from_bob.recv().unwrap());
-    println!("Received `B` from Bob");
+    println!("Received `B` from Bob {}", public_other);
 
     let session_key = derive_session_key(&p, &private, &public_other);
     println!("Session Key for Alice: {}", session_key);
@@ -151,8 +151,8 @@ fn mitm_g_p_1(
         to_bob,
         from_alice,
         from_bob,
-        |pga| (pga.0.clone(), pga.0.clone() - 1, 1.to_bigint().unwrap()),
-        |_, _| 1.to_bigint().unwrap(),
+        |pga| (pga.0.clone(), pga.0.clone() - 1, pga.0 - 1),
+        |b, _| b,
         |_| 1.to_bigint().unwrap());
 }
 
@@ -167,14 +167,14 @@ fn generic_mitm(
 {
     println!("\t\t\t\tWaiting to receive from Alice...");
     let pga = recv_p_g_a(&from_alice);
-    println!("\t\t\t\tReceived `p, g, A` from Alice");
+    println!("\t\t\t\tReceived `p, g, A` from Alice A:{}", pga.2);
 
     let pga_prime = alice_mutator(pga.clone());
     send_p_g_a(&to_bob, &pga_prime.0, &pga_prime.1, &pga_prime.2);
     println!("\t\t\t\tSent `(p, g, A)` to Bob");
 
     let public_bob = recv_bigint(&from_bob);
-    println!("\t\t\t\tReceived `B` from Bob");
+    println!("\t\t\t\tReceived `B` from Bob {}", public_bob);
     let public_bob = bob_mutator(public_bob, &pga);
     to_alice.send(public_bob.to_bytes_le().1).unwrap();
     println!("\t\t\t\tSent `B` to Alice");
@@ -183,13 +183,13 @@ fn generic_mitm(
     let encryption_key = derive_encryption_key(&session_key);
 
     let message = from_alice.recv().unwrap();
-    let decrypted = decrypt_message(&encryption_key, &message);
-    println!("\t\t\t\tMITM broken message from Alice to Bob `{}`", to_string(&decrypted));
+    //let decrypted = decrypt_message(&encryption_key, &message);
+    //println!("\t\t\t\tMITM broken message from Alice to Bob `{}`", to_string(&decrypted));
     to_bob.send(message).unwrap();
 
     let message = from_bob.recv().unwrap();
-    let decrypted = decrypt_message(&encryption_key, &message);
-    println!("\t\t\t\tMITM broken message from Bob to Alice `{}`", to_string(&decrypted));
+    //let decrypted = decrypt_message(&encryption_key, &message);
+    //println!("\t\t\t\tMITM broken message from Bob to Alice `{}`", to_string(&decrypted));
     to_alice.send(message).unwrap();
 }
 
@@ -228,10 +228,10 @@ fn run_mitm(mitm: fn(
 
 fn main() {
     println!("Part 1");
-    run_mitm(mitm_g_1);
+    //run_mitm(mitm_g_1);
     println!("-------------------------------------\n\n");
     println!("Part 2");
-    run_mitm(mitm_g_p);
+    //run_mitm(mitm_g_p);
     println!("-------------------------------------\n\n");
     println!("Part 3");
     run_mitm(mitm_g_p_1);
