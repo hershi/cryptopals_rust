@@ -38,6 +38,16 @@ fn recv_bigint(rx: &Receiver<Vec<u8>>) -> BigInt {
     BigInt::from_bytes_le(Sign::Plus, &rx.recv().unwrap())
 }
 
+fn recv_p_g_a(rx: &Receiver<Vec<u8>>) -> (BigInt, BigInt, BigInt) {
+    (recv_bigint(&rx), recv_bigint(&rx), recv_bigint(&rx))
+}
+
+fn send_p_g_a(tx: &Sender<Vec<u8>>, p: &BigInt, g: &BigInt, public: &BigInt) {
+    tx.send(p.to_bytes_le().1).unwrap();
+    tx.send(g.to_bytes_le().1).unwrap();
+    tx.send(public.to_bytes_le().1).unwrap();
+}
+
 fn derive_encryption_key(session_key: &BigInt) -> Vec<u8> {
     sha1(&session_key.to_bytes_le().1)
         .iter()
@@ -50,12 +60,8 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
     let (p,g) = generate_pg();
     let (private, public) = generate_private_public(&p, &g);
 
-    println!("Sending `p` to Bob");
-    to_bob.send(p.to_bytes_le().1).unwrap();
-    println!("Sending `g` to Bob");
-    to_bob.send(g.to_bytes_le().1).unwrap();
-    println!("Sending `A` to Bob");
-    to_bob.send(public.to_bytes_le().1).unwrap();
+    println!("Sending `p, g, A` to Bob");
+    send_p_g_a(&to_bob, &p, &g, &public);
     println!("Sent to Bob");
 
     let public_other = BigInt::from_bytes_le(Sign::Plus, &from_bob.recv().unwrap());
@@ -80,12 +86,8 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
 
 fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
     println!("\t\tWaiting for Alice...");
-    let p = recv_bigint(&from_alice);
-    println!("\t\tReceived `p` from Alice");
-    let g = recv_bigint(&from_alice);
-    println!("\t\tReceived `g` from Alice");
-    let public_other = recv_bigint(&from_alice);
-    println!("\t\tReceived `A` from Alice");
+    let (p, g, public_other) = recv_p_g_a(&from_alice);
+    println!("\t\tReceived `p, g, A` from Alice");
 
     let (private, public) = generate_private_public(&p, &g);
 
@@ -115,19 +117,11 @@ fn mitm_g_1(
         from_alice: Receiver<Vec<u8>>,
         from_bob: Receiver<Vec<u8>>) {
     println!("\t\t\t\tWaiting to receive from Alice...");
-    let p = recv_bigint(&from_alice);
-    println!("\t\t\t\tReceived `p` from Alice");
-    recv_bigint(&from_alice);
-    println!("\t\t\t\tReceived `g` from Alice");
-    recv_bigint(&from_alice);
-    println!("\t\t\t\tReceived `A` from Alice");
+    let (p, _, _) = recv_p_g_a(&from_alice);
+    println!("\t\t\t\tReceived `p, g, A` from Alice");
 
-    to_bob.send(p.to_bytes_le().1).unwrap();
-    println!("\t\t\t\tSent `p` to Bob");
-    to_bob.send(1.to_bigint().unwrap().to_bytes_le().1).unwrap();
-    println!("\t\t\t\tSent `g=1` to Bob");
-    to_bob.send(1.to_bigint().unwrap().to_bytes_le().1).unwrap();
-    println!("\t\t\t\tSent `A=1` to Bob");
+    send_p_g_a(&to_bob, &p, &1.to_bigint().unwrap(), &1.to_bigint().unwrap());
+    println!("\t\t\t\tSent `(p, g=1, A=1)` to Bob");
 
     let public_bob = recv_bigint(&from_bob);
     println!("\t\t\t\tReceived `B` from Bob");
