@@ -34,6 +34,18 @@ fn decrypt_message(key: &[u8], message: &[u8]) -> Vec<u8> {
     cbc_decrypt(message, key, iv, true)
 }
 
+fn recv_bigint(rx: &Receiver<Vec<u8>>) -> BigInt {
+    BigInt::from_bytes_le(Sign::Plus, &rx.recv().unwrap())
+}
+
+fn derive_encryption_key(session_key: &BigInt) -> Vec<u8> {
+    sha1(&session_key.to_bytes_le().1)
+        .iter()
+        .take(KEY_SIZE)
+        .cloned()
+        .collect::<Vec<u8>>()
+}
+
 fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
     let (p,g) = generate_pg();
     let (private, public) = generate_private_public(&p, &g);
@@ -52,14 +64,7 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
     let session_key = derive_session_key(&p, &private, &public_other);
     println!("Session Key for Alice:");
 
-    let encryption_key = sha1(&session_key.to_bytes_le().1)
-        .iter()
-        .take(KEY_SIZE)
-        .cloned()
-        .collect::<Vec<u8>>();
-
-
-    assert!(encryption_key.len() == KEY_SIZE);
+    let encryption_key = derive_encryption_key(&session_key);
 
     println!("Sending message to Bob");
     let message = encrypt_message_with_iv(&encryption_key, MESSAGE_A);
@@ -75,11 +80,11 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
 
 fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
     println!("\t\tWaiting for Alice...");
-    let p = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let p = recv_bigint(&from_alice);
     println!("\t\tReceived `p` from Alice");
-    let g = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let g = recv_bigint(&from_alice);
     println!("\t\tReceived `g` from Alice");
-    let public_other = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let public_other = recv_bigint(&from_alice);
     println!("\t\tReceived `A` from Alice");
 
     let (private, public) = generate_private_public(&p, &g);
@@ -90,13 +95,7 @@ fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
     let session_key = derive_session_key(&p, &private, &public_other);
     println!("\t\tSession Key for Bob");
 
-    let encryption_key = sha1(&session_key.to_bytes_le().1)
-        .iter()
-        .take(KEY_SIZE)
-        .cloned()
-        .collect::<Vec<u8>>();
-
-    assert!(encryption_key.len() == KEY_SIZE);
+    let encryption_key = derive_encryption_key(&session_key);
 
     println!("\t\tSending message to Alice");
     let message = encrypt_message_with_iv(&encryption_key, MESSAGE_B);
@@ -116,11 +115,11 @@ fn mitm_g_1(
         from_alice: Receiver<Vec<u8>>,
         from_bob: Receiver<Vec<u8>>) {
     println!("\t\t\t\tWaiting to receive from Alice...");
-    let p = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let p = recv_bigint(&from_alice);
     println!("\t\t\t\tReceived `p` from Alice");
-    let g = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    recv_bigint(&from_alice);
     println!("\t\t\t\tReceived `g` from Alice");
-    let public_other = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    recv_bigint(&from_alice);
     println!("\t\t\t\tReceived `A` from Alice");
 
     to_bob.send(p.to_bytes_le().1).unwrap();
@@ -130,17 +129,14 @@ fn mitm_g_1(
     to_bob.send(1.to_bigint().unwrap().to_bytes_le().1).unwrap();
     println!("\t\t\t\tSent `A=1` to Bob");
 
-    let public_bob = BigInt::from_bytes_le(Sign::Plus, &from_bob.recv().unwrap());
+    let public_bob = recv_bigint(&from_bob);
     println!("\t\t\t\tReceived `B` from Bob");
     assert!(public_bob == 1.to_bigint().unwrap());
     to_alice.send(public_bob.to_bytes_le().1).unwrap();
     println!("\t\t\t\tSent `B` to Alice");
 
-    let encryption_key = sha1(&1.to_bigint().unwrap().to_bytes_le().1)
-        .iter()
-        .take(KEY_SIZE)
-        .cloned()
-        .collect::<Vec<u8>>();
+    let session_key = 1.to_bigint().unwrap();
+    let encryption_key = derive_encryption_key(&session_key);
 
     let message = from_alice.recv().unwrap();
     let decrypted = decrypt_message(&encryption_key, &message);
