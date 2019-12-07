@@ -123,7 +123,7 @@ fn mitm_g_1(
         from_bob,
         |pga| (pga.0, 1.to_bigint().unwrap(), 1.to_bigint().unwrap()),
         |_,_|  1.to_bigint().unwrap(),
-        |_| 1.to_bigint().unwrap());
+        |_,_| 1.to_bigint().unwrap());
 }
 
 fn mitm_g_p(
@@ -138,7 +138,7 @@ fn mitm_g_p(
         from_bob,
         |pga| (pga.0.clone(), pga.0, 0.to_bigint().unwrap()),
         |_,_| 0.to_bigint().unwrap(),
-        |_| 0.to_bigint().unwrap());
+        |_,_| 0.to_bigint().unwrap());
 }
 
 fn mitm_g_p_1(
@@ -146,14 +146,16 @@ fn mitm_g_p_1(
         to_bob: Sender<Vec<u8>>,
         from_alice: Receiver<Vec<u8>>,
         from_bob: Receiver<Vec<u8>>) {
+    // When Alice has odd `a` and Bob has even `b` they will reach a different
+    // session key.
     generic_mitm(
         to_alice,
         to_bob,
         from_alice,
         from_bob,
         |pga| (pga.0.clone(), pga.0.clone() - 1, pga.0 - 1),
-        |b, _| b,
-        |_| 1.to_bigint().unwrap());
+        |b,_| b,
+        |_,b| b);
 }
 
 fn generic_mitm(
@@ -163,7 +165,7 @@ fn generic_mitm(
         from_bob: Receiver<Vec<u8>>,
         alice_mutator: fn((BigInt, BigInt, BigInt))->(BigInt, BigInt, BigInt),
         bob_mutator: fn(BigInt, &(BigInt, BigInt, BigInt))->BigInt,
-        session_key_deriver: fn((BigInt, BigInt, BigInt))->BigInt)
+        session_key_deriver: fn((BigInt, BigInt, BigInt), BigInt)->BigInt)
 {
     println!("\t\t\t\tWaiting to receive from Alice...");
     let pga = recv_p_g_a(&from_alice);
@@ -179,17 +181,17 @@ fn generic_mitm(
     to_alice.send(public_bob.to_bytes_le().1).unwrap();
     println!("\t\t\t\tSent `B` to Alice");
 
-    let session_key = session_key_deriver(pga);
+    let session_key = session_key_deriver(pga, public_bob);
     let encryption_key = derive_encryption_key(&session_key);
 
     let message = from_alice.recv().unwrap();
-    //let decrypted = decrypt_message(&encryption_key, &message);
-    //println!("\t\t\t\tMITM broken message from Alice to Bob `{}`", to_string(&decrypted));
+    let decrypted = decrypt_message(&encryption_key, &message);
+    println!("\t\t\t\tMITM broken message from Alice to Bob `{}`", to_string(&decrypted));
     to_bob.send(message).unwrap();
 
     let message = from_bob.recv().unwrap();
-    //let decrypted = decrypt_message(&encryption_key, &message);
-    //println!("\t\t\t\tMITM broken message from Bob to Alice `{}`", to_string(&decrypted));
+    let decrypted = decrypt_message(&encryption_key, &message);
+    println!("\t\t\t\tMITM broken message from Bob to Alice `{}`", to_string(&decrypted));
     to_alice.send(message).unwrap();
 }
 
