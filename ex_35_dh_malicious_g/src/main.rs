@@ -146,7 +146,7 @@ fn mitm_g_p_1(
         to_bob: Sender<Vec<u8>>,
         from_alice: Receiver<Vec<u8>>,
         from_bob: Receiver<Vec<u8>>) {
-    // When Alice has odd `a` and Bob has even `b` they will reach a different
+    // When Alice has even `a` and Bob has odd `b` they will reach a different
     // session key.
     generic_mitm(
         to_alice,
@@ -202,8 +202,8 @@ fn run_mitm(mitm: fn(
         Receiver<Vec<u8>>,
         Receiver<Vec<u8>>)->())
 {
-    let (alice_send, mitm_recv_alice) = channel();
     let (bob_send, mitm_recv_bob) = channel();
+    let (alice_send, mitm_recv_alice) = channel();
     let (mitm_send_alice, alice_recv) = channel();
     let (mitm_send_bob, bob_recv) = channel();
 
