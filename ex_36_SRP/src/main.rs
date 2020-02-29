@@ -46,9 +46,21 @@ fn gen_h264_int(inputs: Vec<&[u8]>) -> BigInt {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct ClientRegistration {
+    email: String,
+    salt: i32,
+    verifier: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct ClientHello {
     email: String,
     public_key: String,
+}
+
+struct UserRecord {
+    salt: i32,
+    verifier: BigInt,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -75,22 +87,44 @@ fn client(to_server: Sender<String>, from_server: Receiver<String>) {
         public_key: public.to_str_radix(16),};
 
     println!("\tClient: public key: {:?}", public);
-    let hello_msg = serde_json::to_string(&hello).unwrap();
-    to_server.send(hello_msg).unwrap();
+    let hello = serde_json::to_string(&hello).unwrap();
+    to_server.send(hello).unwrap();
+
+    let server_challenge = from_server.recv().unwrap();
+    let server_challenge: ServerChallenge = serde_json::from_str(&server_challenge).unwrap();
+    let server_public = BigInt::parse_bytes(server_challenge.public_key.as_bytes(), 16).unwrap();
+    println!("\tClient: server public: {:?}", server_public);
 }
 
 fn server(to_client: Sender<String>, from_client: Receiver<String>) {
-    let state = server_init();
-    //println!("Server init state: {:?}", state);
+    println!("Server: Waiting for registration...");
+
+    let user_recrod = gen_user_record();
+    //println!("User record: {:?}", user_record);
+    //
     println!("Server: Waiting for ClientHello...");
     let client_hello = &from_client.recv().unwrap();
     let client_hello: ClientHello = serde_json::from_str(&client_hello).unwrap();
     let client_public = BigInt::parse_bytes(client_hello.public_key.as_bytes(), 16).unwrap();
-
     println!("Server: Client public key: {:?}", client_public);
+
+    let (private, public) = generate_private_public(
+        &get_nist_prime(),
+        &G.to_bigint().unwrap());
+
+    let public = K.to_bigint().unwrap() * user_recrod.verifier + public;
+
+    println!("Server: server public key: {:?}", public);
+    let challenge = ServerChallenge{
+        salt: user_recrod.salt,
+        public_key: public.to_str_radix(16),
+    };
+
+    let challenge = serde_json::to_string(&challenge).unwrap();
+    to_client.send(challenge);
 }
 
-fn server_init() -> ServerChallenge {
+fn gen_user_record() -> UserRecord {
     let mut rng = thread_rng();
     let salt = rng.gen::<i32>();
     //println!("Server Salt: {}", salt);
@@ -103,8 +137,8 @@ fn server_init() -> ServerChallenge {
     let v = g.modpow(&x, &n);
 
     //println!("Server v: {}" , v);
-    ServerChallenge{
+    UserRecord{
         salt,
-        public_key:  v.to_str_radix(16),
+        verifier: v,
     }
 }
