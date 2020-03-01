@@ -1,7 +1,7 @@
 extern crate rand;
 extern crate num_bigint as bigint;
 
-use bigint::{BigInt, Sign, ToBigInt};
+use bigint::*;
 use hmac::*;
 use rand::prelude::*;
 use sha2::*;
@@ -34,7 +34,7 @@ fn main() {
     client_thread.join().unwrap();
 }
 
-fn gen_h264_int(inputs: Vec<&[u8]>) -> BigInt {
+fn gen_sha256_int(inputs: Vec<&[u8]>) -> BigUint {
     let mut hasher = Sha256::new();
     for input in inputs {
         hasher.input(input);
@@ -42,7 +42,7 @@ fn gen_h264_int(inputs: Vec<&[u8]>) -> BigInt {
 
     let x_h = hasher.result();
     //println!("xH: {:?}", x_h);
-    BigInt::from_bytes_le(Sign::Plus, x_h.as_slice())
+    BigUint::from_bytes_le(x_h.as_slice())
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -58,9 +58,22 @@ struct ClientHello {
     public_key: String,
 }
 
+impl ClientHello {
+    fn new(email: &str, public_key: &BigUint) -> ClientHello {
+        ClientHello{
+            email: email.to_string(),
+            public_key: biguint_to_string(&public_key),}
+    }
+
+    fn new_msg(email: &str, public_key: &BigUint) -> String {
+        let hello = ClientHello::new(email, public_key);
+        serde_json::to_string(&hello).unwrap()
+    }
+}
+
 struct UserRecord {
     salt: i32,
-    verifier: BigInt,
+    verifier: BigUint,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -68,6 +81,20 @@ struct ServerChallenge {
     salt: i32,
     public_key: String,
 }
+
+impl ServerChallenge {
+    fn new(salt: i32, public_key: &BigUint) -> ServerChallenge {
+        ServerChallenge{
+            salt,
+            public_key: biguint_to_string(&public_key),}
+    }
+
+    fn new_msg(salt: i32, public_key: &BigUint) -> String {
+        let challenge = ServerChallenge::new(salt, public_key);
+        serde_json::to_string(&challenge).unwrap()
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ClientResponse {
@@ -79,49 +106,73 @@ struct ServerOk {
     ok: bool,
 }
 
-fn client(to_server: Sender<String>, from_server: Receiver<String>) {
-    let g = G.to_bigint().unwrap();
-    let (private, public) = generate_private_public(&get_nist_prime(), &g);
-    let hello = ClientHello{
-        email: I.to_string(),
-        public_key: public.to_str_radix(16),};
+fn biguint_to_string(x: &BigUint) -> String {
+    x.to_str_radix(16)
+}
 
-    println!("\tClient: public key: {:?}", public);
-    let hello = serde_json::to_string(&hello).unwrap();
+fn biguint_from_string(s: &str) -> BigUint {
+    BigUint::parse_bytes(s.as_bytes(), 16).unwrap()
+}
+
+fn client(to_server: Sender<String>, from_server: Receiver<String>) {
+    println!("\tClient: Generate keys");
+    let (client_private, client_public) = generate_private_public(
+        &get_nist_prime(),
+        &G.to_biguint().unwrap());
+
+    println!("\tClient: Sending ClientHello to Server");
+    let hello = ClientHello::new_msg(I, &client_public);
     to_server.send(hello).unwrap();
 
+    println!("\tClient: Wait for ServerChallenge...");
     let server_challenge = from_server.recv().unwrap();
     let server_challenge: ServerChallenge = serde_json::from_str(&server_challenge).unwrap();
-    let server_public = BigInt::parse_bytes(server_challenge.public_key.as_bytes(), 16).unwrap();
-    println!("\tClient: server public: {:?}", server_public);
+    let server_public = biguint_from_string(&server_challenge.public_key);
+    let salt = server_challenge.salt;
+
+    println!("\tClient: ServerChallenge received. Calculating S");
+
+    let u = gen_sha256_int(vec![
+                            &client_public.to_bytes_le(),
+                            &server_public.to_bytes_le()]);
+    let x = gen_sha256_int(vec![&salt.to_le_bytes(), P]);
+    let k = K.to_biguint().unwrap();
+    let n = get_nist_prime();
+    let g = G.to_biguint().unwrap();
+    let s = (server_public - k * g.modpow(&x, &n)).modpow(&(client_private + u * x), &n);
+    println!("\tClient: S=={:?}", s);
 }
 
 fn server(to_client: Sender<String>, from_client: Receiver<String>) {
-    println!("Server: Waiting for registration...");
+    println!("Server:Rregistering user");
 
-    let user_recrod = gen_user_record();
-    //println!("User record: {:?}", user_record);
-    //
+    let user_record = gen_user_record();
+
     println!("Server: Waiting for ClientHello...");
     let client_hello = &from_client.recv().unwrap();
     let client_hello: ClientHello = serde_json::from_str(&client_hello).unwrap();
-    let client_public = BigInt::parse_bytes(client_hello.public_key.as_bytes(), 16).unwrap();
-    println!("Server: Client public key: {:?}", client_public);
+    let client_public = biguint_from_string(&client_hello.public_key);
 
-    let (private, public) = generate_private_public(
+    let (server_private, server_public) = generate_private_public(
         &get_nist_prime(),
-        &G.to_bigint().unwrap());
+        &G.to_biguint().unwrap());
 
-    let public = K.to_bigint().unwrap() * user_recrod.verifier + public;
+    // In theory, we should have used the email from client_hello to retrieve
+    // the user record, but in the context of this exerices we skip over the
+    // registration path and already know the user record
+    let server_public = K.to_biguint().unwrap() * user_record.verifier.clone() + server_public;
 
-    println!("Server: server public key: {:?}", public);
-    let challenge = ServerChallenge{
-        salt: user_recrod.salt,
-        public_key: public.to_str_radix(16),
-    };
+    let challenge = ServerChallenge::new_msg(user_record.salt, &server_public);
+    to_client.send(challenge).unwrap();
 
-    let challenge = serde_json::to_string(&challenge).unwrap();
-    to_client.send(challenge);
+    let u = gen_sha256_int(vec![
+                            &client_public.to_bytes_le(),
+                            &server_public.to_bytes_le()]);
+
+    let n = get_nist_prime();
+    let s = (client_public * user_record.verifier.modpow(&u, &n))
+        .modpow(&server_private, &n);
+    println!("\tServer: S=={:?}", s);
 }
 
 fn gen_user_record() -> UserRecord {
@@ -129,14 +180,12 @@ fn gen_user_record() -> UserRecord {
     let salt = rng.gen::<i32>();
     //println!("Server Salt: {}", salt);
 
-    let x = gen_h264_int(vec![&salt.to_le_bytes(), P]);
+    let x = gen_sha256_int(vec![&salt.to_le_bytes(), P]);
     //println!("Server x: {}", x);
 
-    let n = get_nist_prime();
-    let g = G.to_bigint().unwrap();
-    let v = g.modpow(&x, &n);
+    let g = G.to_biguint().unwrap();
+    let v = g.modpow(&x, &get_nist_prime());
 
-    //println!("Server v: {}" , v);
     UserRecord{
         salt,
         verifier: v,
