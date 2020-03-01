@@ -1,5 +1,6 @@
 extern crate rand;
 extern crate num_bigint as bigint;
+extern crate hmac;
 
 use bigint::*;
 use hmac::*;
@@ -9,6 +10,8 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use serde::{Serialize, Deserialize};
 use utils::diffie_hellman::*;
+
+type HmacSha256 = Hmac<Sha256>;
 
 const G : i32 = 2;
 const K : i32 = 3;
@@ -41,7 +44,6 @@ fn gen_sha256_int(inputs: Vec<&[u8]>) -> BigUint {
     }
 
     let x_h = hasher.result();
-    //println!("xH: {:?}", x_h);
     BigUint::from_bytes_le(x_h.as_slice())
 }
 
@@ -101,9 +103,29 @@ struct ClientResponse {
     resp: Vec<u8>,
 }
 
+impl ClientResponse {
+    fn new(resp: Vec<u8>) -> ClientResponse {
+        ClientResponse{resp}
+    }
+
+    fn new_msg(resp: Vec<u8>) -> String {
+        serde_json::to_string(&ClientResponse::new(resp)).unwrap()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct ServerOk {
     ok: bool,
+}
+
+impl ServerOk {
+    fn new(ok: bool) -> ServerOk {
+        ServerOk{ok}
+    }
+
+    fn new_msg(ok:bool) -> String {
+        serde_json::to_string(&ServerOk::new(ok)).unwrap()
+    }
 }
 
 fn biguint_to_string(x: &BigUint) -> String {
@@ -130,7 +152,7 @@ fn client(to_server: Sender<String>, from_server: Receiver<String>) {
     let server_public = biguint_from_string(&server_challenge.public_key);
     let salt = server_challenge.salt;
 
-    println!("\tClient: ServerChallenge received. Calculating S");
+    println!("\tClient: ServerChallenge received. Calculating proof");
 
     let u = gen_sha256_int(vec![
                             &client_public.to_bytes_le(),
@@ -140,7 +162,22 @@ fn client(to_server: Sender<String>, from_server: Receiver<String>) {
     let n = get_nist_prime();
     let g = G.to_biguint().unwrap();
     let s = (server_public - k * g.modpow(&x, &n)).modpow(&(client_private + u * x), &n);
-    println!("\tClient: S=={:?}", s);
+
+    let mut hasher = Sha256::new();
+    hasher.input(s.to_bytes_le());
+    let mut hmac = HmacSha256::new_varkey(&salt.to_le_bytes()).unwrap();
+    hmac.input(&hasher.result());
+
+    println!("\tClient: Sending proof to server...");
+    let client_response = ClientResponse::new_msg(hmac.result().code().to_vec());
+    to_server.send(client_response).unwrap();
+
+    println!("\tClient: Wait for ServerOk...");
+    let server_ok = from_server.recv().unwrap();
+    let server_ok: ServerOk = serde_json::from_str(&server_ok).unwrap();
+
+    println!("\tClient: Received ServerOk {:?}", server_ok);
+    println!("\tClient: Done");
 }
 
 fn server(to_client: Sender<String>, from_client: Receiver<String>) {
@@ -162,7 +199,7 @@ fn server(to_client: Sender<String>, from_client: Receiver<String>) {
     // registration path and already know the user record
     let server_public = K.to_biguint().unwrap() * user_record.verifier.clone() + server_public;
 
-    let challenge = ServerChallenge::new_msg(user_record.salt, &server_public);
+    let challenge = ServerChallenge::new_msg(user_record.salt.clone(), &server_public);
     to_client.send(challenge).unwrap();
 
     let u = gen_sha256_int(vec![
@@ -172,7 +209,22 @@ fn server(to_client: Sender<String>, from_client: Receiver<String>) {
     let n = get_nist_prime();
     let s = (client_public * user_record.verifier.modpow(&u, &n))
         .modpow(&server_private, &n);
-    println!("\tServer: S=={:?}", s);
+
+    let mut hasher = Sha256::new();
+    hasher.input(s.to_bytes_le());
+    let mut hmac = HmacSha256::new_varkey(&user_record.salt.to_le_bytes()).unwrap();
+    hmac.input(&hasher.result());
+
+    println!("Server: Waiting for ClientResponse...");
+    let client_response = &from_client.recv().unwrap();
+    let client_response: ClientResponse = serde_json::from_str(&client_response).unwrap();
+
+    let ok = hmac.verify(&client_response.resp).is_ok();
+
+    println!("Server: Validation succeeded? {}; sending response", ok);
+    let server_ok = ServerOk::new_msg(ok);
+    to_client.send(server_ok).unwrap();
+    println!("Server: Done");
 }
 
 fn gen_user_record() -> UserRecord {
