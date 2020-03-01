@@ -1,10 +1,10 @@
 extern crate rand;
 extern crate num_bigint as bigint;
 
-use bigint::{BigInt, ToBigInt};
+use bigint::{BigUint, ToBigUint};
 use utils::diffie_hellman::*;
 
-fn generate_session(p: &BigInt, g: &BigInt) {
+fn generate_session(p: &BigUint, g: &BigUint) {
     let (priv_a, pub_a) = generate_private_public(&p, &g);
     let (priv_b, pub_b) = generate_private_public(&p, &g);
 
@@ -19,8 +19,8 @@ fn generate_session(p: &BigInt, g: &BigInt) {
 
 fn main() {
     generate_session(
-        &37.to_bigint().unwrap(),
-        &5.to_bigint().unwrap());
+        &37.to_biguint().unwrap(),
+        &5.to_biguint().unwrap());
 
     println!("");
 

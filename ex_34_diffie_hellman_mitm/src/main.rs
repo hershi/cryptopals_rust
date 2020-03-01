@@ -7,7 +7,7 @@ use utils::encryption::*;
 use utils::sha1::*;
 use std::thread;
 use std::sync::mpsc::{Sender, Receiver, channel};
-use bigint::{BigInt, Sign, ToBigInt};
+use bigint::*;
 
 const MESSAGE_A : &[u8] = b"Message from A to B";
 const MESSAGE_B : &[u8] = b"Message from B to A";
@@ -39,20 +39,20 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
     let (private, public) = generate_private_public(&p, &g);
 
     println!("Sending `p` to Bob");
-    to_bob.send(p.to_bytes_le().1).unwrap();
+    to_bob.send(p.to_bytes_le()).unwrap();
     println!("Sending `g` to Bob");
-    to_bob.send(g.to_bytes_le().1).unwrap();
+    to_bob.send(g.to_bytes_le()).unwrap();
     println!("Sending `A` to Bob");
-    to_bob.send(public.to_bytes_le().1).unwrap();
+    to_bob.send(public.to_bytes_le()).unwrap();
     println!("Sent to Bob");
 
-    let public_other = BigInt::from_bytes_le(Sign::Plus, &from_bob.recv().unwrap());
+    let public_other = BigUint::from_bytes_le(&from_bob.recv().unwrap());
     println!("Received `B` from Bob");
 
     let session_key = derive_session_key(&p, &private, &public_other);
     println!("Session Key for Alice:");
 
-    let encryption_key = sha1(&session_key.to_bytes_le().1)
+    let encryption_key = sha1(&session_key.to_bytes_le())
         .iter()
         .take(KEY_SIZE)
         .cloned()
@@ -75,22 +75,22 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
 
 fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
     println!("\t\tWaiting for Alice...");
-    let p = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let p = BigUint::from_bytes_le(&from_alice.recv().unwrap());
     println!("\t\tReceived `p` from Alice");
-    let g = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let g = BigUint::from_bytes_le(&from_alice.recv().unwrap());
     println!("\t\tReceived `g` from Alice");
-    let public_other = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let public_other = BigUint::from_bytes_le(&from_alice.recv().unwrap());
     println!("\t\tReceived `A` from Alice");
 
     let (private, public) = generate_private_public(&p, &g);
 
     println!("\t\tSending `B` to Alice");
-    to_alice.send(public.to_bytes_le().1).unwrap();
+    to_alice.send(public.to_bytes_le()).unwrap();
 
     let session_key = derive_session_key(&p, &private, &public_other);
     println!("\t\tSession Key for Bob");
 
-    let encryption_key = sha1(&session_key.to_bytes_le().1)
+    let encryption_key = sha1(&session_key.to_bytes_le())
         .iter()
         .take(KEY_SIZE)
         .cloned()
@@ -116,26 +116,26 @@ fn mitm(
         from_alice: Receiver<Vec<u8>>,
         from_bob: Receiver<Vec<u8>>) {
     println!("\t\t\t\tWaiting to receive from Alice...");
-    let p = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let p = BigUint::from_bytes_le(&from_alice.recv().unwrap());
     println!("\t\t\t\tReceived `p` from Alice");
-    let g = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let g = BigUint::from_bytes_le(&from_alice.recv().unwrap());
     println!("\t\t\t\tReceived `g` from Alice");
-    let public_other = BigInt::from_bytes_le(Sign::Plus, &from_alice.recv().unwrap());
+    let public_other = BigUint::from_bytes_le(&from_alice.recv().unwrap());
     println!("\t\t\t\tReceived `A` from Alice");
 
-    to_bob.send(p.to_bytes_le().1).unwrap();
+    to_bob.send(p.to_bytes_le()).unwrap();
     println!("\t\t\t\tSent `p` to Bob");
-    to_bob.send(g.to_bytes_le().1).unwrap();
+    to_bob.send(g.to_bytes_le()).unwrap();
     println!("\t\t\t\tSent `g` to Bob");
-    to_bob.send(p.to_bytes_le().1).unwrap();
+    to_bob.send(p.to_bytes_le()).unwrap();
     println!("\t\t\t\tSent `p` to Bob");
 
-    let public_bob = BigInt::from_bytes_le(Sign::Plus, &from_bob.recv().unwrap());
+    let public_bob = BigUint::from_bytes_le(&from_bob.recv().unwrap());
     println!("\t\t\t\tReceived `B` from Bob");
-    to_alice.send(p.to_bytes_le().1).unwrap();
+    to_alice.send(p.to_bytes_le()).unwrap();
     println!("\t\t\t\tSent `p` to Alice");
 
-    let encryption_key = sha1(&0.to_bigint().unwrap().to_bytes_le().1)
+    let encryption_key = sha1(&0.to_biguint().unwrap().to_bytes_le())
         .iter()
         .take(KEY_SIZE)
         .cloned()

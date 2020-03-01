@@ -7,7 +7,7 @@ use utils::encryption::*;
 use utils::sha1::*;
 use std::thread;
 use std::sync::mpsc::{Sender, Receiver, channel};
-use bigint::{BigInt, Sign, ToBigInt};
+use bigint::{BigUint, ToBigUint};
 
 const MESSAGE_A : &[u8] = b"Message from A to B";
 const MESSAGE_B : &[u8] = b"Message from B to A";
@@ -34,22 +34,22 @@ fn decrypt_message(key: &[u8], message: &[u8]) -> Vec<u8> {
     cbc_decrypt(message, key, iv, true)
 }
 
-fn recv_bigint(rx: &Receiver<Vec<u8>>) -> BigInt {
-    BigInt::from_bytes_le(Sign::Plus, &rx.recv().unwrap())
+fn recv_biguint(rx: &Receiver<Vec<u8>>) -> BigUint {
+    BigUint::from_bytes_le( &rx.recv().unwrap())
 }
 
-fn recv_p_g_a(rx: &Receiver<Vec<u8>>) -> (BigInt, BigInt, BigInt) {
-    (recv_bigint(&rx), recv_bigint(&rx), recv_bigint(&rx))
+fn recv_p_g_a(rx: &Receiver<Vec<u8>>) -> (BigUint, BigUint, BigUint) {
+    (recv_biguint(&rx), recv_biguint(&rx), recv_biguint(&rx))
 }
 
-fn send_p_g_a(tx: &Sender<Vec<u8>>, p: &BigInt, g: &BigInt, public: &BigInt) {
-    tx.send(p.to_bytes_le().1).unwrap();
-    tx.send(g.to_bytes_le().1).unwrap();
-    tx.send(public.to_bytes_le().1).unwrap();
+fn send_p_g_a(tx: &Sender<Vec<u8>>, p: &BigUint, g: &BigUint, public: &BigUint) {
+    tx.send(p.to_bytes_le()).unwrap();
+    tx.send(g.to_bytes_le()).unwrap();
+    tx.send(public.to_bytes_le()).unwrap();
 }
 
-fn derive_encryption_key(session_key: &BigInt) -> Vec<u8> {
-    sha1(&session_key.to_bytes_le().1)
+fn derive_encryption_key(session_key: &BigUint) -> Vec<u8> {
+    sha1(&session_key.to_bytes_le())
         .iter()
         .take(KEY_SIZE)
         .cloned()
@@ -64,7 +64,7 @@ fn alice(to_bob: Sender<Vec<u8>>, from_bob: Receiver<Vec<u8>>) {
     send_p_g_a(&to_bob, &p, &g, &public);
     println!("Sent to Bob");
 
-    let public_other = BigInt::from_bytes_le(Sign::Plus, &from_bob.recv().unwrap());
+    let public_other = BigUint::from_bytes_le( &from_bob.recv().unwrap());
     println!("Received `B` from Bob {}", public_other);
 
     let session_key = derive_session_key(&p, &private, &public_other);
@@ -92,7 +92,7 @@ fn bob(to_alice: Sender<Vec<u8>>, from_alice: Receiver<Vec<u8>>) {
     let (private, public) = generate_private_public(&p, &g);
 
     println!("\t\tSending `B` to Alice");
-    to_alice.send(public.to_bytes_le().1).unwrap();
+    to_alice.send(public.to_bytes_le()).unwrap();
 
     let session_key = derive_session_key(&p, &private, &public_other);
     println!("\t\tSession Key for Bob {}", session_key);
@@ -121,9 +121,9 @@ fn mitm_g_1(
         to_bob,
         from_alice,
         from_bob,
-        |pga| (pga.0, 1.to_bigint().unwrap(), 1.to_bigint().unwrap()),
-        |_,_|  1.to_bigint().unwrap(),
-        |_,_| 1.to_bigint().unwrap());
+        |pga| (pga.0, 1.to_biguint().unwrap(), 1.to_biguint().unwrap()),
+        |_,_|  1.to_biguint().unwrap(),
+        |_,_| 1.to_biguint().unwrap());
 }
 
 fn mitm_g_p(
@@ -136,9 +136,9 @@ fn mitm_g_p(
         to_bob,
         from_alice,
         from_bob,
-        |pga| (pga.0.clone(), pga.0, 0.to_bigint().unwrap()),
-        |_,_| 0.to_bigint().unwrap(),
-        |_,_| 0.to_bigint().unwrap());
+        |pga| (pga.0.clone(), pga.0, 0.to_biguint().unwrap()),
+        |_,_| 0.to_biguint().unwrap(),
+        |_,_| 0.to_biguint().unwrap());
 }
 
 fn mitm_g_p_1(
@@ -153,7 +153,7 @@ fn mitm_g_p_1(
         to_bob,
         from_alice,
         from_bob,
-        |pga| (pga.0.clone(), pga.0.clone() - 1, pga.0 - 1),
+        |pga| (pga.0.clone(), pga.0.clone() - 1u32, pga.0 - 1u32),
         |b,_| b,
         |_,b| b);
 }
@@ -163,9 +163,9 @@ fn generic_mitm(
         to_bob: Sender<Vec<u8>>,
         from_alice: Receiver<Vec<u8>>,
         from_bob: Receiver<Vec<u8>>,
-        alice_mutator: fn((BigInt, BigInt, BigInt))->(BigInt, BigInt, BigInt),
-        bob_mutator: fn(BigInt, &(BigInt, BigInt, BigInt))->BigInt,
-        session_key_deriver: fn((BigInt, BigInt, BigInt), BigInt)->BigInt)
+        alice_mutator: fn((BigUint, BigUint, BigUint))->(BigUint, BigUint, BigUint),
+        bob_mutator: fn(BigUint, &(BigUint, BigUint, BigUint))->BigUint,
+        session_key_deriver: fn((BigUint, BigUint, BigUint), BigUint)->BigUint)
 {
     println!("\t\t\t\tWaiting to receive from Alice...");
     let pga = recv_p_g_a(&from_alice);
@@ -175,10 +175,10 @@ fn generic_mitm(
     send_p_g_a(&to_bob, &pga_prime.0, &pga_prime.1, &pga_prime.2);
     println!("\t\t\t\tSent `(p, g, A)` to Bob");
 
-    let public_bob = recv_bigint(&from_bob);
+    let public_bob = recv_biguint(&from_bob);
     println!("\t\t\t\tReceived `B` from Bob {}", public_bob);
     let public_bob = bob_mutator(public_bob, &pga);
-    to_alice.send(public_bob.to_bytes_le().1).unwrap();
+    to_alice.send(public_bob.to_bytes_le()).unwrap();
     println!("\t\t\t\tSent `B` to Alice");
 
     let session_key = session_key_deriver(pga, public_bob);
