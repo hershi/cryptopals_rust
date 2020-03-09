@@ -19,8 +19,11 @@ const P : &[u8] = b"thisisdefinitelymyrealpassowrdforallmybankingaccounts";
 
 fn main() {
     println!("Creating channels");
-    let (server_send, client_recv) = channel();
-    let (client_send, server_recv) = channel();
+    let (client_send, mitm_recv_client) = channel();
+    let (mitm_send_client, client_recv) = channel();
+
+    let (mitm_send_server, server_recv) = channel();
+    let (server_send, mitm_recv_server) = channel();
 
     println!("Spinning up server thread...");
     let server_thread = thread::spawn(move || {
@@ -32,8 +35,17 @@ fn main() {
         client(client_send, client_recv);
     });
 
+    println!("Spinning up MITM thread...");
+    let mitm_thread = thread::spawn(move || {
+        mitm(
+            mitm_send_client, mitm_recv_client,
+            mitm_send_server, mitm_recv_server);
+    });
+
+
     server_thread.join().unwrap();
     client_thread.join().unwrap();
+    mitm_thread.join().unwrap();
 }
 
 fn gen_sha256_int(inputs: Vec<&[u8]>) -> BigUint {
@@ -160,12 +172,7 @@ fn client(to_server: Sender<String>, from_server: Receiver<String>) {
     let x = gen_sha256_int(vec![&salt.to_le_bytes(), P]);
     let s = server_public.modpow(&(client_private + u*x), &get_nist_prime());
 
-    let k = Sha256::new()
-        .chain(s.to_bytes_le())
-        .result();
-
-    let mut hmac = HmacSha256::new_varkey(&salt.to_le_bytes()).unwrap();
-    hmac.input(&k);
+    let hmac = hmac_s(&s, salt);
 
     println!("\tClient: Sending proof to server...");
     let client_response = ClientResponse::new_msg(hmac.result().code().to_vec());
@@ -177,6 +184,26 @@ fn client(to_server: Sender<String>, from_server: Receiver<String>) {
 
     println!("\tClient: Received ServerOk {:?}", server_ok);
     println!("\tClient: Done");
+}
+
+fn validate_guessed_password(
+    password: &str,
+    salt: i32,
+    u: &BigUint,
+    client_public: &BigUint,
+    server_private: &BigUint,
+    client_response: &ClientResponse) -> bool {
+
+    // Calculate `v` based on the guessed password, and from that
+    let user_record = gen_user_record_with_salt(salt, password.as_bytes());
+    let v = user_record.verifier;
+    let n = get_nist_prime();
+    let s =
+        (client_public * v.modpow(&u, &n))
+        .modpow(&server_private, &n);
+
+    hmac_s(&s, user_record.salt)
+        .verify(&client_response.resp).is_ok()
 }
 
 fn server(to_client: Sender<String>, from_client: Receiver<String>) {
@@ -205,6 +232,10 @@ fn server(to_client: Sender<String>, from_client: Receiver<String>) {
     let s = (client_public * user_record.verifier.modpow(&u, &n))
         .modpow(&server_private, &n);
 
+    println!("Server: Waiting for ClientResponse...");
+    let client_response = &from_client.recv().unwrap();
+    let client_response: ClientResponse = serde_json::from_str(&client_response).unwrap();
+
     let k = Sha256::new()
         .chain(s.to_bytes_le())
         .result();
@@ -212,11 +243,8 @@ fn server(to_client: Sender<String>, from_client: Receiver<String>) {
     let mut hmac = HmacSha256::new_varkey(&user_record.salt.to_le_bytes()).unwrap();
     hmac.input(&k);
 
-    println!("Server: Waiting for ClientResponse...");
-    let client_response = &from_client.recv().unwrap();
-    let client_response: ClientResponse = serde_json::from_str(&client_response).unwrap();
-
-    let ok = hmac.verify(&client_response.resp).is_ok();
+    let ok = hmac_s(&s, user_record.salt)
+        .verify(&client_response.resp).is_ok();
 
     println!("Server: Validation succeeded? {}; sending response", ok);
     let server_ok = ServerOk::new_msg(ok);
@@ -224,14 +252,19 @@ fn server(to_client: Sender<String>, from_client: Receiver<String>) {
     println!("Server: Done");
 }
 
-fn gen_user_record() -> UserRecord {
-    let mut rng = thread_rng();
-    let salt = rng.gen::<i32>();
-    //println!("Server Salt: {}", salt);
+fn mitm(to_client: Sender<String>,
+        from_client: Receiver<String>,
+        to_server: Sender<String>,
+        from_server: Receiver<String>) {
+    for msg in from_client {
+        println!("\t\t\tMITM: Received message from Client! Forwarding...");
+        to_server.send(msg).unwrap();
+        to_client.send(from_server.recv().unwrap()).unwrap();
+    }
+}
 
-    let x = gen_sha256_int(vec![&salt.to_le_bytes(), P]);
-    //println!("Server x: {}", x);
-
+fn gen_user_record_with_salt(salt: i32, p: &[u8]) -> UserRecord {
+    let x = gen_sha256_int(vec![&salt.to_le_bytes(), p]);
     let g = G.to_biguint().unwrap();
     let v = g.modpow(&x, &get_nist_prime());
 
@@ -239,4 +272,18 @@ fn gen_user_record() -> UserRecord {
         salt,
         verifier: v,
     }
+}
+
+fn gen_user_record() -> UserRecord {
+    gen_user_record_with_salt(thread_rng().gen::<i32>(), P)
+}
+
+fn hmac_s(s: &BigUint, salt: i32) -> HmacSha256 {
+    let k = Sha256::new()
+        .chain(s.to_bytes_le())
+        .result();
+
+    let mut hmac = HmacSha256::new_varkey(&salt.to_le_bytes()).unwrap();
+    hmac.input(&k);
+    hmac
 }
