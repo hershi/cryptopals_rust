@@ -46,8 +46,7 @@ pub fn mitm(to_client: Sender<String>,
         &get_nist_prime(),
         &G.to_biguint().unwrap());
 
-    let client_hello = &from_client.recv().unwrap();
-    let client_hello = ClientHello::deserialize(&client_hello);
+    let client_hello = ClientHello::deserialize(&from_client.recv().unwrap());
     let client_public = biguint_from_string(&client_hello.public_key);
     println!("\t\t\tMITM: Received ClientHello from Client! Crafting MITM Hello...");
 
@@ -66,8 +65,7 @@ pub fn mitm(to_client: Sender<String>,
     to_client.send(mitm_challenge.serialize()).unwrap();
     println!("\t\t\tMITM: Sent crafted challenge to Client..");
 
-    let client_response = &from_client.recv().unwrap();
-    let client_response = ClientResponse::deserialize(&client_response);
+    let client_response = ClientResponse::deserialize(&from_client.recv().unwrap());
     println!("\t\t\tMITM: Received ClientResponse from Client! Trying to guess password...");
 
     let password = crack_password(
@@ -136,6 +134,6 @@ fn validate_guessed_password(
     let result = hmac_s(&s, user_record.salt)
         .verify(&client_response.resp).is_ok();
 
-    println!("Trying to crack with {}. Result: {}", password, result);
+    println!("\t\t\tMITM: Trying to crack with {}. Result: {}", password, result);
     result
 }

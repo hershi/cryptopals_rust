@@ -14,8 +14,7 @@ pub fn server(to_client: Sender<String>, from_client: Receiver<String>) {
     let user_record = gen_user_record(P, &G.to_biguint().unwrap());
 
     println!("Server: Waiting for ClientHello...");
-    let client_hello = &from_client.recv().unwrap();
-    let client_hello = ClientHello::deserialize(&client_hello);
+    let client_hello = ClientHello::deserialize(&from_client.recv().unwrap());
     let client_public = biguint_from_string(&client_hello.public_key);
 
     let (server_private, server_public) = generate_private_public(
@@ -35,8 +34,8 @@ pub fn server(to_client: Sender<String>, from_client: Receiver<String>) {
         .modpow(&server_private, &n);
 
     println!("Server: Waiting for ClientResponse...");
-    let client_response = &from_client.recv().unwrap();
-    let client_response = ClientResponse::deserialize(&client_response);
+    let client_response = ClientResponse::deserialize(
+        &from_client.recv().unwrap());
 
     let ok = hmac_s(&s, user_record.salt)
         .verify(&client_response.resp).is_ok();
