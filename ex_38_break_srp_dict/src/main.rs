@@ -1,21 +1,26 @@
 extern crate rand;
 extern crate num_bigint as bigint;
-extern crate hmac;
+
+mod messages;
+mod utils;
 
 use bigint::*;
 use hmac::*;
 use rand::prelude::*;
-use sha2::*;
 use std::sync::mpsc::{Sender, Receiver, channel};
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::fs::File;
 use std::thread;
-use serde::{Serialize, Deserialize};
-use utils::diffie_hellman::*;
+use ::utils::diffie_hellman::*;
+use self::utils::*;
 
-type HmacSha256 = Hmac<Sha256>;
+pub use messages::*;
 
 const G : i32 = 2;
 const I : &str = "email@email.com";
 const P : &[u8] = b"thisisdefinitelymyrealpassowrdforallmybankingaccounts";
+
 
 fn main() {
     println!("Creating channels");
@@ -48,108 +53,6 @@ fn main() {
     mitm_thread.join().unwrap();
 }
 
-fn gen_sha256_int(inputs: Vec<&[u8]>) -> BigUint {
-    let mut hasher = Sha256::new();
-    for input in inputs {
-        hasher.input(input);
-    }
-
-    let x_h = hasher.result();
-    BigUint::from_bytes_le(x_h.as_slice())
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ClientRegistration {
-    email: String,
-    salt: i32,
-    verifier: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ClientHello {
-    email: String,
-    public_key: String,
-}
-
-impl ClientHello {
-    fn new(email: &str, public_key: &BigUint) -> ClientHello {
-        ClientHello{
-            email: email.to_string(),
-            public_key: biguint_to_string(&public_key),}
-    }
-
-    fn new_msg(email: &str, public_key: &BigUint) -> String {
-        let hello = ClientHello::new(email, public_key);
-        serde_json::to_string(&hello).unwrap()
-    }
-}
-
-struct UserRecord {
-    salt: i32,
-    verifier: BigUint,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ServerChallenge {
-    salt: i32,
-    public_key: String,
-    u: u128,
-}
-
-impl ServerChallenge {
-    fn new(salt: i32, public_key: &BigUint, u: u128) -> ServerChallenge {
-        ServerChallenge{
-            salt,
-            public_key: biguint_to_string(&public_key),
-            u,
-        }
-    }
-
-    fn new_msg(salt: i32, public_key: &BigUint, u: u128) -> String {
-        let challenge = ServerChallenge::new(salt, public_key, u);
-        serde_json::to_string(&challenge).unwrap()
-    }
-}
-
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ClientResponse {
-    resp: Vec<u8>,
-}
-
-impl ClientResponse {
-    fn new(resp: Vec<u8>) -> ClientResponse {
-        ClientResponse{resp}
-    }
-
-    fn new_msg(resp: Vec<u8>) -> String {
-        serde_json::to_string(&ClientResponse::new(resp)).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ServerOk {
-    ok: bool,
-}
-
-impl ServerOk {
-    fn new(ok: bool) -> ServerOk {
-        ServerOk{ok}
-    }
-
-    fn new_msg(ok:bool) -> String {
-        serde_json::to_string(&ServerOk::new(ok)).unwrap()
-    }
-}
-
-fn biguint_to_string(x: &BigUint) -> String {
-    x.to_str_radix(16)
-}
-
-fn biguint_from_string(s: &str) -> BigUint {
-    BigUint::parse_bytes(s.as_bytes(), 16).unwrap()
-}
-
 fn client(to_server: Sender<String>, from_server: Receiver<String>) {
     println!("\tClient: Generate keys");
     let (client_private, client_public) = generate_private_public(
@@ -157,33 +60,152 @@ fn client(to_server: Sender<String>, from_server: Receiver<String>) {
         &G.to_biguint().unwrap());
 
     println!("\tClient: Sending ClientHello to Server");
-    let hello = ClientHello::new_msg(I, &client_public);
+    let hello = ClientHello::new(I, &client_public).serialize();
     to_server.send(hello).unwrap();
 
     println!("\tClient: Wait for ServerChallenge...");
     let server_challenge = from_server.recv().unwrap();
-    let server_challenge: ServerChallenge = serde_json::from_str(&server_challenge).unwrap();
+    println!("\tClient: ServerChallenge received. Calculating proof");
+
+    let server_challenge = ServerChallenge::deserialize(&server_challenge);
     let server_public = biguint_from_string(&server_challenge.public_key);
     let salt = server_challenge.salt;
     let u = server_challenge.u.to_biguint().unwrap();
-
-    println!("\tClient: ServerChallenge received. Calculating proof");
 
     let x = gen_sha256_int(vec![&salt.to_le_bytes(), P]);
     let s = server_public.modpow(&(client_private + u*x), &get_nist_prime());
 
     let hmac = hmac_s(&s, salt);
 
+    let client_response = ClientResponse::new(hmac.result().code().to_vec());
+
     println!("\tClient: Sending proof to server...");
-    let client_response = ClientResponse::new_msg(hmac.result().code().to_vec());
-    to_server.send(client_response).unwrap();
+    to_server.send(client_response.serialize()).unwrap();
 
     println!("\tClient: Wait for ServerOk...");
     let server_ok = from_server.recv().unwrap();
-    let server_ok: ServerOk = serde_json::from_str(&server_ok).unwrap();
+    let server_ok = ServerOk::deserialize(&server_ok);
 
     println!("\tClient: Received ServerOk {:?}", server_ok);
     println!("\tClient: Done");
+}
+
+fn server(to_client: Sender<String>, from_client: Receiver<String>) {
+    println!("Server:Rregistering user");
+
+    let user_record = gen_user_record(P, &G.to_biguint().unwrap());
+
+    println!("Server: Waiting for ClientHello...");
+    let client_hello = &from_client.recv().unwrap();
+    let client_hello = ClientHello::deserialize(&client_hello);
+    let client_public = biguint_from_string(&client_hello.public_key);
+
+    let (server_private, server_public) = generate_private_public(
+        &get_nist_prime(),
+        &G.to_biguint().unwrap());
+
+    let u = thread_rng().gen::<u128>();
+    let challenge = ServerChallenge::new(
+        user_record.salt.clone(),
+        &server_public,
+        u);
+    to_client.send(challenge.serialize()).unwrap();
+
+    let u = u.to_biguint().unwrap();
+    let n = get_nist_prime();
+    let s = (client_public * user_record.verifier.modpow(&u, &n))
+        .modpow(&server_private, &n);
+
+    println!("Server: Waiting for ClientResponse...");
+    let client_response = &from_client.recv().unwrap();
+    let client_response = ClientResponse::deserialize(&client_response);
+
+    let ok = hmac_s(&s, user_record.salt)
+        .verify(&client_response.resp).is_ok();
+
+    println!("Server: Validation succeeded? {}; sending response", ok);
+    let server_ok = ServerOk::new(ok);
+    to_client.send(server_ok.serialize()).unwrap();
+    println!("Server: Done");
+}
+
+fn mitm(to_client: Sender<String>,
+        from_client: Receiver<String>,
+        to_server: Sender<String>,
+        from_server: Receiver<String>) {
+    let (mitm_private, mitm_public) = generate_private_public(
+        &get_nist_prime(),
+        &G.to_biguint().unwrap());
+
+    let client_hello = &from_client.recv().unwrap();
+    let client_hello = ClientHello::deserialize(&client_hello);
+    let client_public = biguint_from_string(&client_hello.public_key);
+    println!("\t\t\tMITM: Received ClientHello from Client! Crafting MITM Hello...");
+
+    let mitm_hello = ClientHello::new(&client_hello.email, &mitm_public);
+    to_server.send(mitm_hello.serialize()).unwrap();
+
+    let server_challenge = from_server.recv().unwrap();
+    println!("\t\t\tMITM: Received ServerChallenge from Server! Crafting MITM Challenge...");
+
+    let mitm_salt = thread_rng().gen::<i32>();
+    let mitm_u = thread_rng().gen::<u128>();
+    let mitm_challenge = ServerChallenge::new(
+        mitm_salt,
+        &mitm_public,
+        mitm_u);
+    to_client.send(mitm_challenge.serialize()).unwrap();
+    println!("\t\t\tMITM: Sent crafted challenge to Client..");
+
+    let client_response = &from_client.recv().unwrap();
+    let client_response = ClientResponse::deserialize(&client_response);
+    println!("\t\t\tMITM: Received ClientResponse from Client! Trying to guess password...");
+
+    let password = crack_password(
+        mitm_salt,
+        &mitm_u.to_biguint().unwrap(),
+        &client_public,
+        &mitm_private,
+        &client_response);
+
+    if let Some(password) = password {
+        let response = calculate_client_proof(
+            &server_challenge,
+            &password,
+            &mitm_private);
+        to_server.send(response.serialize()).unwrap();
+    } else {
+        // Couldn't crack the password, just forward to the server and hope for the
+        // best :)
+        to_server.send(client_response.serialize()).unwrap();
+    }
+
+    // Forward whatever the server response was
+    to_client.send(from_server.recv().unwrap()).unwrap();
+}
+
+fn read_password_dict() -> Vec<String> {
+    let input_file = File::open("src/passwords.txt").unwrap();
+    let reader = BufReader::new(input_file);
+    reader.lines()
+        .map(|x|x.unwrap())
+        .collect::<Vec<String>>()
+}
+
+fn crack_password(
+    salt: i32,
+    u: &BigUint,
+    client_public: &BigUint,
+    server_private: &BigUint,
+    client_response: &ClientResponse) -> Option<String> {
+
+    let candidates = read_password_dict();
+    candidates.iter()
+        .map(|p| (p, validate_guessed_password(
+            &p, salt, u, client_public, server_private, client_response)))
+        .filter(|&(_, correct)| correct)
+        .map(|(p,_)| p.to_string())
+        .nth(0)
 }
 
 fn validate_guessed_password(
@@ -195,95 +217,18 @@ fn validate_guessed_password(
     client_response: &ClientResponse) -> bool {
 
     // Calculate `v` based on the guessed password, and from that
-    let user_record = gen_user_record_with_salt(salt, password.as_bytes());
+    let user_record = gen_user_record_with_salt(salt, password.as_bytes(), &G.to_biguint().unwrap());
     let v = user_record.verifier;
     let n = get_nist_prime();
     let s =
         (client_public * v.modpow(&u, &n))
         .modpow(&server_private, &n);
 
-    hmac_s(&s, user_record.salt)
-        .verify(&client_response.resp).is_ok()
-}
-
-fn server(to_client: Sender<String>, from_client: Receiver<String>) {
-    println!("Server:Rregistering user");
-
-    let user_record = gen_user_record();
-
-    println!("Server: Waiting for ClientHello...");
-    let client_hello = &from_client.recv().unwrap();
-    let client_hello: ClientHello = serde_json::from_str(&client_hello).unwrap();
-    let client_public = biguint_from_string(&client_hello.public_key);
-
-    let (server_private, server_public) = generate_private_public(
-        &get_nist_prime(),
-        &G.to_biguint().unwrap());
-
-    let u = thread_rng().gen::<u128>();
-    let challenge = ServerChallenge::new_msg(
-        user_record.salt.clone(),
-        &server_public,
-        u);
-    to_client.send(challenge).unwrap();
-
-    let u = u.to_biguint().unwrap();
-    let n = get_nist_prime();
-    let s = (client_public * user_record.verifier.modpow(&u, &n))
-        .modpow(&server_private, &n);
-
-    println!("Server: Waiting for ClientResponse...");
-    let client_response = &from_client.recv().unwrap();
-    let client_response: ClientResponse = serde_json::from_str(&client_response).unwrap();
-
-    let k = Sha256::new()
-        .chain(s.to_bytes_le())
-        .result();
-
-    let mut hmac = HmacSha256::new_varkey(&user_record.salt.to_le_bytes()).unwrap();
-    hmac.input(&k);
-
-    let ok = hmac_s(&s, user_record.salt)
+    let result = hmac_s(&s, user_record.salt)
         .verify(&client_response.resp).is_ok();
 
-    println!("Server: Validation succeeded? {}; sending response", ok);
-    let server_ok = ServerOk::new_msg(ok);
-    to_client.send(server_ok).unwrap();
-    println!("Server: Done");
+    println!("Trying to crack with {}. Result: {}", password, result);
+    result
 }
 
-fn mitm(to_client: Sender<String>,
-        from_client: Receiver<String>,
-        to_server: Sender<String>,
-        from_server: Receiver<String>) {
-    for msg in from_client {
-        println!("\t\t\tMITM: Received message from Client! Forwarding...");
-        to_server.send(msg).unwrap();
-        to_client.send(from_server.recv().unwrap()).unwrap();
-    }
-}
 
-fn gen_user_record_with_salt(salt: i32, p: &[u8]) -> UserRecord {
-    let x = gen_sha256_int(vec![&salt.to_le_bytes(), p]);
-    let g = G.to_biguint().unwrap();
-    let v = g.modpow(&x, &get_nist_prime());
-
-    UserRecord{
-        salt,
-        verifier: v,
-    }
-}
-
-fn gen_user_record() -> UserRecord {
-    gen_user_record_with_salt(thread_rng().gen::<i32>(), P)
-}
-
-fn hmac_s(s: &BigUint, salt: i32) -> HmacSha256 {
-    let k = Sha256::new()
-        .chain(s.to_bytes_le())
-        .result();
-
-    let mut hmac = HmacSha256::new_varkey(&salt.to_le_bytes()).unwrap();
-    hmac.input(&k);
-    hmac
-}
