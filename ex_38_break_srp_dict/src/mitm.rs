@@ -11,6 +11,33 @@ use super::messages::*;
 
 use super::{G};
 
+// So, how do we crack the password?
+// The MITM can send their own ServerChallenge to the client. Specifically, they
+// can use their own B, b, salt, and u - since the client has no way to authenticate
+// that it is indeed the server that sent the message, they will respond with
+// a valid response to the MITM challenge.
+//
+// The MITM can then try to "guess" the password and mimic what the server would
+// have done to validate the client response against the known password. If the
+// validation succeeds, then we found the password.
+// Note that the only things the server needs to know to validate are:
+// 1. The password - we have that - it's our guessed password
+// 2. The server's (private:public) key-pair - we know it because we used the
+//    MITM key-pair when talking to the client
+// 3. The salt - we can just copy that from the original server challenge that
+//    we intercepted
+// 4. 'u' - we know that since we sent our own 'u' to the client (and we could
+//    just copy it from the server's challenge anyway)
+// 5. The client's public key - we know that one from intercepting the client
+//    hello message.
+//
+// To crack the password, we just iterate over the list of candidate passwords
+// and try to validate the client's response against them. Once we find one for
+// which the validation succeeds, we found their password.
+// We can then use that password to respond to the server as if we were the
+// client, since the only thing we really need to know in order to authenticate
+// is the password
+
 pub fn mitm(to_client: Sender<String>,
         from_client: Receiver<String>,
         to_server: Sender<String>,
